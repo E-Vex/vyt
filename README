@@ -1,0 +1,5 @@
+vyt
+===
+
+A tiny C wrapper around yt-dlp and mpv. 
+A small C wrapper around yt-dlp and mpv that makes their commands easier to use.
