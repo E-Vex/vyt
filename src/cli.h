@@ -13,6 +13,12 @@ typedef enum
     MODE_HELP    /* -h */
 } mode_t;
 
+typedef struct
+{
+    mode_t mode;
+    char *argument; /* URL for -m/-v, search query for -s, NULL for -h */
+} options_t;
+
 void cli_print_usage(FILE *stream);
 void cli_print_help(void);
 

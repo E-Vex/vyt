@@ -26,3 +26,13 @@ void cli_print_help(void)
         "vyt requires yt-dlp and mpv.\n"
         "Make sure you have the latest versions installed and available on your PATH..\n");
 }
+
+int cli_parse(int argc, char **argv, options_t *opts)
+{
+    opts->mode = MODE_NONE;
+    opts->argument = NULL;
+
+    /* TODO: Parse command-line arguments and populate opts->mode and opts->argument */
+
+    return 0;
+}
