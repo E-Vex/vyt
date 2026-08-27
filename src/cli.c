@@ -1,4 +1,8 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include <stdio.h>
+#include <string.h>
+#include <unistd.h>
 
 #include "cli.h"
 
@@ -32,7 +36,61 @@ int cli_parse(int argc, char **argv, options_t *opts)
     opts->mode = MODE_NONE;
     opts->argument = NULL;
 
-    /* TODO: Parse command-line arguments and populate opts->mode and opts->argument */
+    mode_t mode = MODE_NONE;
+    char *argument = NULL;
+
+    int opt;
+    while ((opt = getopt(argc, argv, ":m:v:s:h")) != -1)
+    {
+        switch (opt)
+        {
+        case 'm':
+        case 'v':
+        case 's':
+
+            if (opt == 'm')
+            {
+                mode = MODE_MUSIC;
+            }
+            else if (opt == 'v')
+            {
+                mode = MODE_VIDEO;
+            }
+            else
+            {
+                mode = MODE_SEARCH;
+            }
+
+            argument = optarg;
+            break;
+
+        case 'h':
+            mode = MODE_HELP;
+            break;
+
+        case ':':
+            fprintf(stderr,
+                    "vyt: error: option -%c requires an argument\n", optopt);
+            return -1;
+
+        case '?':
+        default:
+            if (optopt)
+            {
+                fprintf(stderr, "vyt: error: unknown option '-%c'\n", optopt);
+            }
+            else
+            {
+                fprintf(stderr, "vyt: error: unknown option '%s'\n",
+                        argv[optind - 1]);
+            }
+
+            break;
+        }
+    }
+
+    opts->mode = mode;
+    opts->argument = argument;
 
     return 0;
 }

@@ -17,7 +17,7 @@ int main(int argc, char **argv)
     }
 
     options_t opts;
-    if (cli_parse(argc, argv, &opts) != 0)
+    if ((cli_parse(argc, argv, &opts)) != 0)
     {
         cli_print_usage(stderr);
         return EXIT_FAILURE;
