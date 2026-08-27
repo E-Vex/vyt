@@ -22,4 +22,6 @@ typedef struct
 void cli_print_usage(FILE *stream);
 void cli_print_help(void);
 
+int cli_parse(int argc, char **argv, options_t *opts);
+
 #endif /* CLI_H */
