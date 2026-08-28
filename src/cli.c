@@ -39,6 +39,8 @@ int cli_parse(int argc, char **argv, options_t *opts)
     mode_t mode = MODE_NONE;
     char *argument = NULL;
 
+    opterr = 0;
+
     int opt;
     while ((opt = getopt(argc, argv, ":m:v:s:h")) != -1)
     {
@@ -47,6 +49,16 @@ int cli_parse(int argc, char **argv, options_t *opts)
         case 'm':
         case 'v':
         case 's':
+            if (mode == MODE_HELP)
+            {
+                fprintf(stderr, "vyt: error: -h cannot be combined with other options\n");
+                return -1;
+            }
+            if (mode != MODE_NONE)
+            {
+                fprintf(stderr, "vyt: error: only one of -m, -v or -s may be specified\n");
+                return -1;
+            }
 
             if (opt == 'm')
             {
@@ -65,12 +77,16 @@ int cli_parse(int argc, char **argv, options_t *opts)
             break;
 
         case 'h':
+            if (mode != MODE_NONE)
+            {
+                fprintf(stderr, "vyt: error: -h cannot be combined with other options\n");
+                return -1;
+            }
             mode = MODE_HELP;
             break;
 
         case ':':
-            fprintf(stderr,
-                    "vyt: error: option -%c requires an argument\n", optopt);
+            fprintf(stderr, "vyt: error: option -%c requires an argument\n", optopt);
             return -1;
 
         case '?':
@@ -81,16 +97,25 @@ int cli_parse(int argc, char **argv, options_t *opts)
             }
             else
             {
-                fprintf(stderr, "vyt: error: unknown option '%s'\n",
-                        argv[optind - 1]);
+                fprintf(stderr, "vyt: error: unknown option '%s'\n", argv[optind - 1]);
             }
-
-            break;
+            return -1;
         }
+    }
+
+    if (optind < argc)
+    {
+        fprintf(stderr, "vyt: error: unexpected argument '%s'\n", argv[optind]);
+        return -1;
+    }
+
+    if (mode == MODE_NONE)
+    {
+        fprintf(stderr, "vyt: error: no mode specified (-m, -v, -s or -h)\n");
+        return -1;
     }
 
     opts->mode = mode;
     opts->argument = argument;
-
     return 0;
 }
