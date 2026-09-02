@@ -33,7 +33,7 @@ int main(int argc, char **argv)
         break;
 
     case MODE_VIDEO:
-        /* TODO: invoke yt-dlp/mpv for video playback */
+        status = player_play_video(opts.argument);
         break;
 
     case MODE_SEARCH:
