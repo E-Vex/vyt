@@ -8,6 +8,7 @@
 /* ========================================================================= */
 #include "cli.h"
 #include "player.h"
+#include "search.h"
 
 int main(int argc, char **argv)
 {
@@ -37,7 +38,7 @@ int main(int argc, char **argv)
         break;
 
     case MODE_SEARCH:
-        /* TODO: invoke yt-dlp/mpv for search */
+        status = search_youtube(opts.argument);
         break;
 
     case MODE_HELP:
