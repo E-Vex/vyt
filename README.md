@@ -1,14 +1,14 @@
 # vyt
 
-vyt is a small C wrapper around [`yt-dlp`](https://github.com/yt-dlp/yt-dlp) and [`mpv`](https://mpv.io/) that makes searching and playing YouTube media fast & simple from the terminal with just 3 options:
+`vyt` is a small C wrapper around [`yt-dlp`](https://github.com/yt-dlp/yt-dlp)
+and [`mpv`](https://mpv.io/) that makes searching and playing YouTube media
+fast & simple from the terminal.
 
--s search
--m play music
--v play video
+`vyt` never shells out through `system()` commands run via `fork` +
+`execvp`, so URLs and search queries are passed as arguments, not
+interpolated into a shell string.
 
-vyt never shells out through `system()` — commands run via `fork` + `execvp`,
-so URLs and search queries are passed as arguments, not interpolated into a
-shell string.
+**Platform:** Linux only (for now).
 
 ## Build & install
 
@@ -18,6 +18,8 @@ cd vyt
 make            # builds ./vyt
 make install    # installs to ~/.local/bin/vyt
 ```
+
+Make sure `~/.local/bin` is on your `PATH`.
 
 ## Usage
 
@@ -36,14 +38,30 @@ Options:
   -h        Show this message :D
 ```
 
+### Examples
+
+```sh
+# Play a video
+vyt -v "https://youtube.com/watch?v=dQw4w9WgXcQ"
+
+# Play just the audio
+vyt -m "https://youtube.com/watch?v=dQw4w9WgXcQ"
+
+# Search and pick a result
+vyt -s "lofi hip hop radio"
+```
+
+<!-- NOTE: I assumed `-s` lists the top 10 results and lets you pick one
+     by number before playing. Adjust this section to match the real
+     interactive flow if it's different. -->
+
 ## Dependencies
 
 - [`yt-dlp`](https://github.com/yt-dlp/yt-dlp) and [`mpv`](https://mpv.io/),
   both available on your `PATH`
 - A C17 compiler (`gcc` or `clang`)
 - `make`
-
-Make sure `~/.local/bin` is on your `PATH`.
+- Linux (not currently tested/supported on macOS or Windows)
 
 ## Tests
 
@@ -51,8 +69,15 @@ Make sure `~/.local/bin` is on your `PATH`.
 make test
 ```
 
+## Uninstall
 
+```sh
+rm ~/.local/bin/vyt
+```
 
-## License
+<!-- NOTE: I assumed there's no `make uninstall` target yet — swap this
+     for `make uninstall` if you add one to the Makefile. -->
 
-MIT — see [LICENSE](LICENSE).
+## LICENSE
+
+  [MIT](LICENSE)
