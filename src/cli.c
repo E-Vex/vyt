@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include "cli.h"
+#include "version.h"
 
 void cli_print_usage(FILE *stream)
 {
@@ -25,10 +26,16 @@ void cli_print_help(void)
         "  -m URL    Play YouTube URL as music (audio only, via mpv --no-video)\n"
         "  -v URL    Play YouTube URL as video (via mpv)\n"
         "  -s QUERY  Search YouTube for QUERY (via yt-dlp, top 10 results)\n"
+        "  -V        Print the version\n"
         "  -h        Show this message :D\n"
         "\n"
         "vyt requires yt-dlp and mpv.\n"
         "Make sure you have the latest versions installed and available on your PATH..\n");
+}
+
+void cli_print_version(void)
+{
+    printf("vyt %s\n", VYT_VERSION);
 }
 
 int cli_parse(int argc, char **argv, options_t *opts)
@@ -42,16 +49,16 @@ int cli_parse(int argc, char **argv, options_t *opts)
     opterr = 0;
 
     int opt;
-    while ((opt = getopt(argc, argv, ":m:v:s:h")) != -1)
+    while ((opt = getopt(argc, argv, ":m:v:s:hV")) != -1)
     {
         switch (opt)
         {
         case 'm':
         case 'v':
         case 's':
-            if (mode == MODE_HELP)
+            if (mode == MODE_HELP || mode == MODE_VERSION)
             {
-                fprintf(stderr, "vyt: error: -h cannot be combined with other options\n");
+                fprintf(stderr, "vyt: error: -h/-V cannot be combined with other options\n");
                 return -1;
             }
             if (mode != MODE_NONE)
@@ -77,12 +84,21 @@ int cli_parse(int argc, char **argv, options_t *opts)
             break;
 
         case 'h':
+        case 'V':
             if (mode != MODE_NONE)
             {
-                fprintf(stderr, "vyt: error: -h cannot be combined with other options\n");
+                fprintf(stderr, "vyt: error: -h/-V cannot be combined with other options\n");
                 return -1;
             }
-            mode = MODE_HELP;
+
+            if (opt == 'h')
+            {
+                mode = MODE_HELP;
+            }
+            else
+            {
+                mode = MODE_VERSION;
+            }
             break;
 
         case ':':

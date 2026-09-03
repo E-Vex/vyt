@@ -45,6 +45,10 @@ int main(int argc, char **argv)
         cli_print_help();
         return EXIT_SUCCESS;
 
+    case MODE_VERSION:
+        cli_print_version();
+        return EXIT_SUCCESS;
+
     case MODE_NONE:
     default:
         cli_print_usage(stderr);

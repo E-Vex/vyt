@@ -10,7 +10,8 @@ typedef enum
     MODE_MUSIC,  /* -m URL  */
     MODE_VIDEO,  /* -v URL  */
     MODE_SEARCH, /* -s QUERY */
-    MODE_HELP    /* -h */
+    MODE_HELP,   /* -h */
+    MODE_VERSION /* -V */
 } mode_t;
 
 typedef struct
@@ -21,6 +22,7 @@ typedef struct
 
 void cli_print_usage(FILE *stream);
 void cli_print_help(void);
+void cli_print_version(void);
 
 int cli_parse(int argc, char **argv, options_t *opts);
 
