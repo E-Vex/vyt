@@ -1,0 +1,76 @@
+.TH VYT 1 "2026" "vyt 0.1.0" "User Commands"
+.SH NAME
+vyt \- a tiny C wrapper around yt-dlp and mpv
+.SH SYNOPSIS
+.B vyt
+.B \-m
+.I URL
+.br
+.B vyt
+.B \-v
+.I URL
+.br
+.B vyt
+.B \-s
+.I QUERY
+.br
+.B vyt
+.B \-V
+.br
+.B vyt
+.B \-h
+.SH DESCRIPTION
+.B vyt
+is a tiny wrapper around
+.BR yt-dlp (1)
+and
+.BR mpv (1)
+that lets you play or search YouTube content with short,
+memorable commands instead of typing out long
+.B mpv
+or
+.B yt-dlp
+invocations.
+.SH OPTIONS
+.TP
+.BI \-m " URL"
+Play
+.I URL
+as music: audio only, via
+.B mpv --no-video.
+.TP
+.BI \-v " URL"
+Play
+.I URL
+as video, via
+.BR mpv .
+.TP
+.BI \-s " QUERY"
+Search YouTube for
+.I QUERY
+via
+.BR yt-dlp ,
+printing the top 10 results as "title | URL".
+.TP
+.B \-V
+Print the version and exit.
+.TP
+.B \-h
+Show usage and exit.
+.SH EXIT STATUS
+Exit status is that of the underlying
+.B mpv
+or
+.B yt-dlp
+process, or non-zero if
+.B vyt
+itself failed to parse arguments or launch the process.
+.SH REQUIREMENTS
+.B yt-dlp
+and
+.B mpv
+must be installed and available on
+.BR PATH .
+.SH SEE ALSO
+.BR yt-dlp (1),
+.BR mpv (1)

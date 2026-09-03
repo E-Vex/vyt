@@ -21,5 +21,7 @@ $(TEST_BIN): $(TEST_SRC)
 
 install: $(TARGET)
 	install -Dm755 $(TARGET) $(HOME)/.local/bin/$(TARGET)
+	install -Dm644 man/vyt.1 $(HOME)/.local/share/man/man1/vyt.1
+
 clean:
 	rm -f $(TARGET) $(TEST_BIN)
