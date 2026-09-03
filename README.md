@@ -1,5 +1,9 @@
 # vyt
 
+<p align="center">
+  <img src="vyt_logo.svg" alt="vyt logo" width="180"/>
+</p>
+
 `vyt` is a small C wrapper around [`yt-dlp`](https://github.com/yt-dlp/yt-dlp)
 and [`mpv`](https://mpv.io/) that makes searching and playing YouTube media
 fast & simple from the terminal.
