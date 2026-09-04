@@ -1,30 +1,44 @@
-<svg width="100%" viewBox="220 20 240 320" xmlns="http://www.w3.org/2000/svg" role="img">
+<svg width="100%" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" role="img">
   <style>
-    .bg-box { fill: #0f6e56; stroke: #15b886; stroke-width: 2px; }
-    .terminal-symbol { stroke: #ffffff; fill: none; }
-    .terminal-cursor { fill: #ffffff; }
-    .brand-text { fill: #ffffff; font-family: ui-monospace, monospace; font-size: 64px; font-weight: 600; letter-spacing: 2px; text-anchor: middle; }
+    .bg-box { fill: #111111; stroke: #2d2d2d; stroke-width: 2px; }
+    .dot-red { fill: #FF5F56; }
+    .dot-yel { fill: #FFBD2E; }
+    .dot-grn { fill: #27C93F; }
+
+    .terminal-text {
+      font-family: ui-monospace, SFMono-Regular, "Cascadia Code", "Fira Code", monospace;
+      font-size: 46px;
+      font-weight: 700;
+    }
+    .prompt { fill: #52525B; }
+    .text-v { fill: #FFFFFF; }
+    .text-yt { fill: #FF0000; }
+    .cursor { fill: #FFFFFF; animation: blink 1.2s step-end infinite; }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
 
     @media (prefers-color-scheme: light) {
-      .bg-box { fill: #e1f5ee; stroke: #0f6e56; }
-      .terminal-symbol { stroke: #0f6e56; }
-      .terminal-cursor { fill: #0f6e56; }
-      .brand-text { fill: #0d1117; }
+      .bg-box { fill: #F8FAFC; stroke: #E2E8F0; }
+      .prompt { fill: #94A3B8; }
+      .text-v { fill: #0F172A; }
+      .cursor { fill: #0F172A; }
     }
   </style>
 
   <title>vyt logo</title>
-  <desc>vyt logo, a rounded terminal icon containing a prompt symbol and cursor with the text vyt below it.</desc>
+  <desc>A terminal window showing the command vyt with 'v' standing for E-Vex and 'yt' in YouTube red.</desc>
 
-  <!-- Background Box -->
-  <rect class="bg-box" x="240" y="40" width="200" height="200" rx="40"/>
+  <!-- Terminal Window Background -->
+  <rect class="bg-box" x="16" y="16" width="224" height="224" rx="24"/>
 
-  <!-- Prompt Symbol -->
-  <path class="terminal-symbol" d="M 295 95 L 335 140 L 295 185" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- macOS Style Window Buttons -->
+  <circle class="dot-red" cx="42" cy="42" r="6"/>
+  <circle class="dot-yel" cx="62" cy="42" r="6"/>
+  <circle class="dot-grn" cx="82" cy="42" r="6"/>
 
-  <!-- Cursor -->
-  <rect class="terminal-cursor" x="350" y="172" width="42" height="13" rx="2"/>
-
-  <!-- Brand Text -->
-  <text class="brand-text" x="340" y="300">vyt</text>
+  <!-- Centered Command Text -->
+  <text class="terminal-text" x="50%" y="54%" text-anchor="middle" dominant-baseline="middle" xml:space="preserve"><tspan class="prompt">&gt; </tspan><tspan class="text-v">v</tspan><tspan class="text-yt">yt</tspan><tspan class="cursor">_</tspan></text>
 </svg>
