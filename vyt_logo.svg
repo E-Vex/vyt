@@ -1,23 +1,25 @@
 <svg width="100%" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" role="img">
   <style>
-    .bg { fill: #0d1117; stroke: #30363d; stroke-width: 2px; }
+    /* الوضع الداكن - أخضر داكن أنيق */
+    .bg { fill: #0f6e56; stroke: #15b886; stroke-width: 2px; }
     .text { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 56px; font-weight: 600; }
-    .prompt { fill: #8b949e; }
-    .v-text { fill: #f0f6fc; }
+    .prompt { fill: #a7d8c7; }
+    .v-text { fill: #ffffff; }
     .yt-text { fill: #ff7b72; }
 
+    /* الوضع الفاتح - الأخضر الفاتح الأصلي */
     @media (prefers-color-scheme: light) {
-      .bg { fill: #f6f8fa; stroke: #d0d7de; }
-      .prompt { fill: #57606a; }
-      .v-text { fill: #24292f; }
+      .bg { fill: #e1f5ee; stroke: #0f6e56; }
+      .prompt { fill: #0f6e56; }
+      .v-text { fill: #0d1117; }
       .yt-text { fill: #cf222e; }
     }
   </style>
 
   <title>vyt logo</title>
-  <desc>Minimalist terminal logo for vyt</desc>
+  <desc>Minimalist terminal logo for vyt with green theme</desc>
 
-  <!-- Clean Background Card matching GitHub -->
+  <!-- Clean Background Card -->
   <rect class="bg" x="16" y="16" width="224" height="224" rx="36"/>
 
   <!-- Centered Clean Command -->
