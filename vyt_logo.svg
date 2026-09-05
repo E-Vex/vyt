@@ -1,44 +1,25 @@
 <svg width="100%" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" role="img">
   <style>
-    .bg-box { fill: #111111; stroke: #2d2d2d; stroke-width: 2px; }
-    .dot-red { fill: #FF5F56; }
-    .dot-yel { fill: #FFBD2E; }
-    .dot-grn { fill: #27C93F; }
-
-    .terminal-text {
-      font-family: ui-monospace, SFMono-Regular, "Cascadia Code", "Fira Code", monospace;
-      font-size: 46px;
-      font-weight: 700;
-    }
-    .prompt { fill: #52525B; }
-    .text-v { fill: #FFFFFF; }
-    .text-yt { fill: #FF0000; }
-    .cursor { fill: #FFFFFF; animation: blink 1.2s step-end infinite; }
-
-    @keyframes blink {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0; }
-    }
+    .bg { fill: #0d1117; stroke: #30363d; stroke-width: 2px; }
+    .text { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 56px; font-weight: 600; }
+    .prompt { fill: #8b949e; }
+    .v-text { fill: #f0f6fc; }
+    .yt-text { fill: #ff7b72; }
 
     @media (prefers-color-scheme: light) {
-      .bg-box { fill: #F8FAFC; stroke: #E2E8F0; }
-      .prompt { fill: #94A3B8; }
-      .text-v { fill: #0F172A; }
-      .cursor { fill: #0F172A; }
+      .bg { fill: #f6f8fa; stroke: #d0d7de; }
+      .prompt { fill: #57606a; }
+      .v-text { fill: #24292f; }
+      .yt-text { fill: #cf222e; }
     }
   </style>
 
   <title>vyt logo</title>
-  <desc>A terminal window showing the command vyt with 'v' standing for E-Vex and 'yt' in YouTube red.</desc>
+  <desc>Minimalist terminal logo for vyt</desc>
 
-  <!-- Terminal Window Background -->
-  <rect class="bg-box" x="16" y="16" width="224" height="224" rx="24"/>
+  <!-- Clean Background Card matching GitHub -->
+  <rect class="bg" x="16" y="16" width="224" height="224" rx="36"/>
 
-  <!-- macOS Style Window Buttons -->
-  <circle class="dot-red" cx="42" cy="42" r="6"/>
-  <circle class="dot-yel" cx="62" cy="42" r="6"/>
-  <circle class="dot-grn" cx="82" cy="42" r="6"/>
-
-  <!-- Centered Command Text -->
-  <text class="terminal-text" x="50%" y="54%" text-anchor="middle" dominant-baseline="middle" xml:space="preserve"><tspan class="prompt">&gt; </tspan><tspan class="text-v">v</tspan><tspan class="text-yt">yt</tspan><tspan class="cursor">_</tspan></text>
+  <!-- Centered Clean Command -->
+  <text class="text" x="50%" y="52%" text-anchor="middle" dominant-baseline="middle" xml:space="preserve"><tspan class="prompt">&gt; </tspan><tspan class="v-text">v</tspan><tspan class="yt-text">yt</tspan></text>
 </svg>
