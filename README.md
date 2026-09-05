@@ -12,7 +12,7 @@ fast & simple from the terminal.
 `execvp`, so URLs and search queries are passed as arguments, not
 interpolated into a shell string.
 
-**Platform:** Linux only (for now).
+**Platform:** Linux only
 
 ## Build & install
 
@@ -20,7 +20,8 @@ interpolated into a shell string.
 git clone https://github.com/E-Vex/vyt.git
 cd vyt
 make            # builds ./vyt
-make install    # installs to ~/.local/bin/vyt
+make install    # installs to ~/.local/bin/vyt 
+                # and the man page to ~/.local/share/man/man1/vyt.1
 ```
 
 Make sure `~/.local/bin` is on your `PATH`.
@@ -32,6 +33,7 @@ Usage:
   vyt -m URL
   vyt -v URL
   vyt -s QUERY
+  vyt -V
   vyt -h
 
 Options:
@@ -41,23 +43,20 @@ Options:
   -V        Print the version
   -h        Show this message :D
 ```
+See `man vyt` for the full manual page.
 
 ### Examples
 
 ```sh
 # Play a video
-vyt -v "https://youtube.com/watch?v=dQw4w9WgXcQ"
+vyt -v "https://youtu.be/pahb4TugTkQ" 
 
 # Play just the audio
-vyt -m "https://youtube.com/watch?v=dQw4w9WgXcQ"
+vyt -m "https://youtu.be/OgJ5bEg31Aw"
 
-# Search and pick a result
-vyt -s "lofi hip hop radio"
+# Search (prints the top 10 results as "title | URL")
+vyt -s "Purgatori"
 ```
-
-<!-- NOTE: I assumed `-s` lists the top 10 results and lets you pick one
-     by number before playing. Adjust this section to match the real
-     interactive flow if it's different. -->
 
 ## Dependencies
 
@@ -77,11 +76,10 @@ make test
 
 ```sh
 rm ~/.local/bin/vyt
+rm ~/.local/share/man/man1/vyt.1
 ```
-
-<!-- NOTE: I assumed there's no `make uninstall` target yet — swap this
-     for `make uninstall` if you add one to the Makefile. -->
 
 ## LICENSE
 
   [MIT](LICENSE)
+  
