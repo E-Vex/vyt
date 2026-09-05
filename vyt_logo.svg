@@ -1,13 +1,13 @@
 <svg width="100%" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" role="img">
   <style>
-    /* الوضع الداكن - أخضر داكن أنيق */
+   
     .bg { fill: #0f6e56; stroke: #15b886; stroke-width: 2px; }
     .text { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 56px; font-weight: 600; }
     .prompt { fill: #a7d8c7; }
     .v-text { fill: #ffffff; }
     .yt-text { fill: #ff7b72; }
 
-    /* الوضع الفاتح - الأخضر الفاتح الأصلي */
+    
     @media (prefers-color-scheme: light) {
       .bg { fill: #e1f5ee; stroke: #0f6e56; }
       .prompt { fill: #0f6e56; }
