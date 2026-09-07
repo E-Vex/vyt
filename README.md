@@ -81,5 +81,4 @@ rm ~/.local/share/man/man1/vyt.1
 
 ## LICENSE
 
-  [MIT](LICENSE)
-  
+[![License: MIT](https://img.shields.io/github/license/gcla/termshark.svg?color=yellow)](LICENSE)
