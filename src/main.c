@@ -2,12 +2,14 @@
 /* SYSTEM & C STANDARD LIBRARIES                                             */
 /* ========================================================================= */
 #include <stdlib.h>
+#include <string.h>
 
 /* ========================================================================= */
 /* LOCAL MODULES                                                             */
 /* ========================================================================= */
 #include "cli.h"
 #include "player.h"
+#include "playlist_cmd.h"
 #include "search.h"
 
 int main(int argc, char **argv)
@@ -16,6 +18,11 @@ int main(int argc, char **argv)
     {
         cli_print_usage(stderr);
         return EXIT_FAILURE;
+    }
+
+    if (strcmp(argv[1], "playlist") == 0)
+    {
+        return playlist_cmd_run(argc - 2, argv + 2);
     }
 
     options_t opts;
