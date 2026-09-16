@@ -20,6 +20,9 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
+    /* Subcommand form: "vyt playlist ...".
+     * Handled before cli_parse so getopt never sees these words.
+     * argv + 2 is safe even when argc == 2: argv[argc] is NULL. */
     if (strcmp(argv[1], "playlist") == 0)
     {
         return playlist_cmd_run(argc - 2, argv + 2);

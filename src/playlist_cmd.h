@@ -1,4 +1,3 @@
-/* src/playlist_cmd.h */
 #ifndef PLAYLIST_CMD_H
 #define PLAYLIST_CMD_H
 

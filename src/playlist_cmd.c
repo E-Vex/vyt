@@ -131,6 +131,120 @@ static int cmd_list(int argc, char **argv)
     return 0;
 }
 
+
+/* ------------------------------------------------------------------------ */
+/* song subcommands                                                          */
+/* ------------------------------------------------------------------------ */
+
+static int cmd_song_add(int argc, char **argv)
+{
+    if (argc != 2)
+    {
+        return usage_error("playlist song add", "a playlist name and one URL");
+    }
+
+    const char *name = argv[0];
+    const char *url = argv[1];
+
+    pl_status_t status = playlist_song_add(name, url);
+    if (status != PL_OK)
+    {
+        /* Name the thing that is wrong: the playlist or the URL. */
+        const char *subject = (status == PL_ERR_URL || status == PL_ERR_DUPLICATE)
+                                  ? url
+                                  : name;
+        return report(subject, status);
+    }
+
+    printf("added to '%s': %s\n", name, url);
+    return 0;
+}
+
+static int cmd_song_remove(int argc, char **argv)
+{
+    if (argc != 2)
+    {
+        return usage_error("playlist song remove", "a playlist name and one URL");
+    }
+
+    const char *name = argv[0];
+    const char *url = argv[1];
+
+    pl_status_t status = playlist_song_remove(name, url);
+    if (status != PL_OK)
+    {
+        const char *subject = (status == PL_ERR_URL || status == PL_ERR_NO_SONG) ? url : name;
+        return report(subject, status);
+    }
+
+    printf("removed from '%s': %s\n", name, url);
+    return 0;
+}
+
+static int cmd_song_list(int argc, char **argv)
+{
+    if (argc != 1)
+    {
+        return usage_error("playlist song list", "exactly one playlist name");
+    }
+
+    const char *name = argv[0];
+
+    playlist_t pl;
+    pl_status_t status = playlist_load(name, &pl);
+    if (status != PL_OK)
+    {
+        return report(name, status);
+    }
+
+    if (pl.count == 0)
+    {
+        fprintf(stderr, "vyt: '%s' has no songs yet (add one with 'vyt playlist song add %s <url>')\n",
+                name, name);
+        playlist_free(&pl);
+        return 0;
+    }
+
+    for (size_t i = 0; i < pl.count; i++)
+    {
+        printf("%s\n", pl.songs[i]);
+    }
+
+    playlist_free(&pl);
+    return 0;
+}
+
+static int cmd_song(int argc, char **argv)
+{
+    if (argc < 1)
+    {
+        fprintf(stderr, "vyt: error: 'playlist song' requires a command\n");
+        playlist_cmd_print_usage(stderr);
+        return 1;
+    }
+
+    const char *command = argv[0];
+
+    if (strcmp(command, "add") == 0)
+    {
+        return cmd_song_add(argc - 1, argv + 1);
+    }
+
+    if (strcmp(command, "remove") == 0)
+    {
+        return cmd_song_remove(argc - 1, argv + 1);
+    }
+
+    if (strcmp(command, "list") == 0)
+    {
+        return cmd_song_list(argc - 1, argv + 1);
+    }
+
+    fprintf(stderr, "vyt: error: unknown song command '%s'\n", command);
+    playlist_cmd_print_usage(stderr);
+    return 1;
+}
+
 /* ========================================================================= */
 /* DISPATCH                                                                  */
 /* ========================================================================= */
@@ -167,10 +281,15 @@ int playlist_cmd_run(int argc, char **argv)
         return 0;
     }
 
-    /* TODO(stage 3): song add/remove/list.  TODO(stage 4): play. */
-    if (strcmp(command, "song") == 0 || strcmp(command, "play") == 0)
+    if (strcmp(command, "song") == 0)
     {
-        fprintf(stderr, "vyt: error: 'playlist %s' is not implemented yet\n", command);
+        return cmd_song(argc - 1, argv + 1);
+    }
+
+    /* TODO(stage 4): play. */
+    if (strcmp(command, "play") == 0)
+    {
+        fprintf(stderr, "vyt: error: 'playlist play' is not implemented yet\n");
         return 1;
     }
 

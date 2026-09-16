@@ -386,3 +386,332 @@ void playlist_list_free(char **names, size_t count)
     }
     free(names);
 }
+
+/* ========================================================================= */
+/* SONG-LEVEL OPERATIONS                                                     */
+/* ========================================================================= */
+
+pl_status_t playlist_check_url(const char *url)
+{
+    if (url == NULL || url[0] == '\0')
+    {
+        return PL_ERR_URL;
+    }
+
+    size_t len = strlen(url);
+    if (len > PL_URL_MAX)
+    {
+        return PL_ERR_URL;
+    }
+
+    /* Requiring a scheme does three jobs at once: it rejects nonsense, it
+     * keeps one URL on one line, and it guarantees the string can never be
+     * mistaken for an mpv option when we exec it (an option starts with -). */
+    if (strncmp(url, "http://", 7) != 0 && strncmp(url, "https://", 8) != 0)
+    {
+        return PL_ERR_URL;
+    }
+
+    for (size_t i = 0; i < len; i++)
+    {
+        unsigned char c = (unsigned char)url[i];
+        if (c <= 0x20 || c == 0x7f)
+        {
+            return PL_ERR_URL;
+        }
+    }
+
+    return PL_OK;
+}
+
+/* Append an already-owned string to the in-memory playlist.
+ * On failure the caller still owns the string. */
+static pl_status_t songs_push(playlist_t *pl, char *url)
+{
+    if (pl->count == pl->capacity)
+    {
+        size_t new_capacity = (pl->capacity == 0) ? 8 : pl->capacity * 2;
+        char **grown = realloc(pl->songs, new_capacity * sizeof *grown);
+        if (grown == NULL)
+        {
+            return PL_ERR_MEMORY;
+        }
+        pl->songs = grown;
+        pl->capacity = new_capacity;
+    }
+
+    pl->songs[pl->count] = url;
+    pl->count++;
+    return PL_OK;
+}
+
+/* Strip the newline and any surrounding blanks, in place. */
+static char *trim(char *s)
+{
+    while (*s == ' ' || *s == '\t')
+    {
+        s++;
+    }
+
+    size_t len = strlen(s);
+    while (len > 0)
+    {
+        char c = s[len - 1];
+        if (c != '\n' && c != '\r' && c != ' ' && c != '\t')
+        {
+            break;
+        }
+        s[--len] = '\0';
+    }
+
+    return s;
+}
+
+pl_status_t playlist_load(const char *name, playlist_t *out)
+{
+    out->songs = NULL;
+    out->count = 0;
+    out->capacity = 0;
+
+    char path[PATH_MAX];
+    pl_status_t status = playlist_path(name, path, sizeof path);
+    if (status != PL_OK)
+    {
+        return status;
+    }
+
+    FILE *fp = fopen(path, "r");
+    if (fp == NULL)
+    {
+        return (errno == ENOENT) ? PL_ERR_NOT_FOUND : PL_ERR_IO;
+    }
+
+    char *line = NULL;
+    size_t cap = 0;
+    ssize_t n;
+
+    while ((n = getline(&line, &cap, fp)) != -1)
+    {
+        char *url = trim(line);
+        if (url[0] == '\0')
+        {
+            continue; /* blank line left by a hand edit */
+        }
+
+        char *copy = strdup(url);
+        if (copy == NULL)
+        {
+            status = PL_ERR_MEMORY;
+            break;
+        }
+
+        status = songs_push(out, copy);
+        if (status != PL_OK)
+        {
+            free(copy);
+            break;
+        }
+    }
+
+    if (status == PL_OK && ferror(fp))
+    {
+        status = PL_ERR_IO;
+    }
+
+    free(line);
+
+    int saved_errno = errno;
+    fclose(fp);
+    errno = saved_errno;
+
+    if (status != PL_OK)
+    {
+        playlist_free(out);
+    }
+
+    return status;
+}
+
+void playlist_free(playlist_t *pl)
+{
+    if (pl == NULL || pl->songs == NULL)
+    {
+        return;
+    }
+
+    for (size_t i = 0; i < pl->count; i++)
+    {
+        free(pl->songs[i]);
+    }
+    free(pl->songs);
+
+    pl->songs = NULL;
+    pl->count = 0;
+    pl->capacity = 0;
+}
+
+/* Replace a playlist file with the given songs, atomically.
+ * We write a temporary file and rename() it over the original: rename is
+ * atomic, so an interrupted vyt can never leave a half-written playlist. */
+static pl_status_t playlist_store(const char *name, const playlist_t *pl)
+{
+    char dir[PATH_MAX];
+    pl_status_t status = playlist_dir(dir, sizeof dir);
+    if (status != PL_OK)
+    {
+        return status;
+    }
+
+    char path[PATH_MAX];
+    char tmp[PATH_MAX];
+    int a = snprintf(path, sizeof path, "%s/%s", dir, name);
+    /* The temp name starts with a dot so a crashed run leaves something that
+     * playlist_list() skips instead of a playlist named "chill.tmp". */
+    int b = snprintf(tmp, sizeof tmp, "%s/.%s.XXXXXX", dir, name);
+    if (a < 0 || (size_t)a >= sizeof path || b < 0 || (size_t)b >= sizeof tmp)
+    {
+        return PL_ERR_NAME;
+    }
+
+    int fd = mkstemp(tmp);
+    if (fd < 0)
+    {
+        return PL_ERR_IO;
+    }
+
+    /* mkstemp creates the file 0600; playlists are ordinary config files. */
+    if (fchmod(fd, 0644) != 0)
+    {
+        close(fd);
+        unlink(tmp);
+        return PL_ERR_IO;
+    }
+
+    FILE *fp = fdopen(fd, "w");
+    if (fp == NULL)
+    {
+        close(fd);
+        unlink(tmp);
+        return PL_ERR_IO;
+    }
+
+    for (size_t i = 0; i < pl->count; i++)
+    {
+        if (fprintf(fp, "%s\n", pl->songs[i]) < 0)
+        {
+            fclose(fp);
+            unlink(tmp);
+            return PL_ERR_IO;
+        }
+    }
+
+    /* Flush through the C library, then through the kernel, before renaming:
+     * otherwise a power cut can leave the new name pointing at empty data. */
+    if (fflush(fp) != 0 || fsync(fileno(fp)) != 0)
+    {
+        fclose(fp);
+        unlink(tmp);
+        return PL_ERR_IO;
+    }
+
+    if (fclose(fp) != 0)
+    {
+        unlink(tmp);
+        return PL_ERR_IO;
+    }
+
+    if (rename(tmp, path) != 0)
+    {
+        unlink(tmp);
+        return PL_ERR_IO;
+    }
+
+    return PL_OK;
+}
+
+pl_status_t playlist_song_add(const char *name, const char *url)
+{
+    pl_status_t status = playlist_check_url(url);
+    if (status != PL_OK)
+    {
+        return status;
+    }
+
+    /* Loading first also answers "does this playlist exist?". */
+    playlist_t pl;
+    status = playlist_load(name, &pl);
+    if (status != PL_OK)
+    {
+        return status;
+    }
+
+    for (size_t i = 0; i < pl.count; i++)
+    {
+        if (strcmp(pl.songs[i], url) == 0)
+        {
+            playlist_free(&pl);
+            return PL_ERR_DUPLICATE;
+        }
+    }
+
+    char *copy = strdup(url);
+    if (copy == NULL)
+    {
+        playlist_free(&pl);
+        return PL_ERR_MEMORY;
+    }
+
+    status = songs_push(&pl, copy);
+    if (status != PL_OK)
+    {
+        free(copy);
+        playlist_free(&pl);
+        return status;
+    }
+
+    status = playlist_store(name, &pl);
+    playlist_free(&pl);
+    return status;
+}
+
+pl_status_t playlist_song_remove(const char *name, const char *url)
+{
+    if (url == NULL || url[0] == '\0')
+    {
+        return PL_ERR_URL;
+    }
+
+    playlist_t pl;
+    pl_status_t status = playlist_load(name, &pl);
+    if (status != PL_OK)
+    {
+        return status;
+    }
+
+    size_t index = pl.count;
+    for (size_t i = 0; i < pl.count; i++)
+    {
+        if (strcmp(pl.songs[i], url) == 0)
+        {
+            index = i;
+            break;
+        }
+    }
+
+    if (index == pl.count)
+    {
+        playlist_free(&pl);
+        return PL_ERR_NO_SONG;
+    }
+
+    free(pl.songs[index]);
+    for (size_t i = index + 1; i < pl.count; i++)
+    {
+        pl.songs[i - 1] = pl.songs[i];
+    }
+    pl.count--;
+
+    status = playlist_store(name, &pl);
+    playlist_free(&pl);
+    return status;
+}

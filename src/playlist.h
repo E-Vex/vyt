@@ -1,13 +1,16 @@
-/* src/playlist.h */
 #ifndef PLAYLIST_H
 #define PLAYLIST_H
 
 #include <stddef.h>
 
-#define PL_NAME_MAX 255
+/* Longest playlist name we accept, in bytes. */
+#define PL_NAME_MAX 64
+
+/* Longest URL we accept, in bytes. */
+#define PL_URL_MAX 2048
 
 /* Result of a playlist operation.
- * PL_ERR_IO means the C library failed and errno is set;
+ * PL_ERR_IO means a libc call failed and errno is set;
  * every other value is self-describing (see playlist_strerror). */
 typedef enum
 {
@@ -44,6 +47,10 @@ pl_status_t playlist_create(const char *name);
 pl_status_t playlist_delete(const char *name);
 pl_status_t playlist_list(char ***names_out, size_t *count_out);
 void playlist_list_free(char **names, size_t count);
+
+/* Is this string acceptable as a playlist entry?
+ * Exposed so playback can re-check lines that were hand-edited into the file. */
+pl_status_t playlist_check_url(const char *url);
 
 /* Song-level operations. */
 pl_status_t playlist_load(const char *name, playlist_t *out);
