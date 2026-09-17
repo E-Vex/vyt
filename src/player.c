@@ -18,7 +18,6 @@ int player_play_video(const char *url)
     char *argv[] = {
         "mpv",
         (char *)url,
-        NULL
-    };
+        NULL};
     return proc_run("mpv", argv);
 }
