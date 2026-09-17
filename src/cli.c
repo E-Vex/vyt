@@ -14,6 +14,7 @@ void cli_print_usage(FILE *stream)
             "  vyt -m URL\n"
             "  vyt -v URL\n"
             "  vyt -s QUERY\n"
+            "  vyt playlist <command> ...\n"
             "  vyt -h\n");
 }
 
@@ -29,6 +30,15 @@ void cli_print_help(void)
         "  -V        Print the version\n"
         "  -h        Show this message :D\n"
         "\n"
+        "Playlist:\n"
+        "  vyt playlist add <name>            Create a new playlist\n"
+        "  vyt playlist list                  List all playlists\n"
+        "  vyt playlist remove <name>         Remove a playlist\n"
+        "  vyt playlist song add <p> <url>    Add a URL to a playlist\n"
+        "  vyt playlist song remove <p> <url>  Remove a URL from a playlist\n"
+        "  vyt playlist song list <p>         List songs in a playlist\n"
+        "  vyt playlist play <p>              Play a playlist shuffled forever\n"
+        "\n"
         "vyt requires yt-dlp and mpv.\n"
         "Make sure you have the latest versions installed and available on your PATH..\n");
 }
@@ -42,6 +52,19 @@ int cli_parse(int argc, char **argv, options_t *opts)
 {
     opts->mode = MODE_NONE;
     opts->argument = NULL;
+
+    /*
+     * Pre-dispatch: `vyt playlist ...` is a positional subcommand tree.
+     * getopt() cannot express `playlist add <name>`, so we intercept it
+     * here, before getopt permutes argv, and let main.c delegate the
+     * remaining argv to the playlist module.
+     */
+    if (argc >= 2 && strcmp(argv[1], "playlist") == 0)
+    {
+        opts->mode = MODE_PLAYLIST;
+        opts->argument = NULL;
+        return 0;
+    }
 
     mode_t mode = MODE_NONE;
     char *argument = NULL;

@@ -6,12 +6,13 @@
 /* The mode the user requested on the command line. */
 typedef enum
 {
-    MODE_NONE,   /* nothing selected */
-    MODE_MUSIC,  /* -m URL  */
-    MODE_VIDEO,  /* -v URL  */
-    MODE_SEARCH, /* -s QUERY */
-    MODE_HELP,   /* -h */
-    MODE_VERSION /* -V */
+    MODE_NONE,    /* nothing selected */
+    MODE_MUSIC,   /* -m URL  */
+    MODE_VIDEO,   /* -v URL  */
+    MODE_SEARCH,  /* -s QUERY */
+    MODE_HELP,    /* -h */
+    MODE_VERSION, /* -V */
+    MODE_PLAYLIST /* `vyt playlist ...` subcommand tree */
 } mode_t;
 
 typedef struct
