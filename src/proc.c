@@ -34,10 +34,20 @@ int proc_run(const char *program, char *const argv[])
         _exit(127);
     }
 
-    /* Parent: wait for the child to finish. */
+    /* Parent: wait for the child to finish.
+     *
+     * waitpid() can return -1 with errno==EINTR if a signal arrives during
+     * the wait.  This is normal and recoverable: just retry.  Treating it as
+     * a hard error (the previous behavior) would leak "failed to wait for
+     * 'mpv': Interrupted system call" to the user whenever they pressed
+     * Ctrl+C during playback. */
     int status;
-    if (waitpid(pid, &status, 0) < 0)
+    while (waitpid(pid, &status, 0) < 0)
     {
+        if (errno == EINTR)
+        {
+            continue;
+        }
         fprintf(stderr, "vyt: error: failed to wait for '%s': %s\n", program, strerror(errno));
         return -1;
     }
