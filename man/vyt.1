@@ -70,12 +70,13 @@ Show usage and exit.
 .B vyt
 stores playlists as plain text files under the playlists directory (see
 .B FILES
-below). Each playlist is one file, each song is one line, and songs must
-be
+below). Each playlist is one file, each song is one line of the form
+.RB ` "song_name = url" ,
+and the URL portion must be
 .B http://
 or
-.B https://
-URLs. The directory is created on first use.
+.B https://.
+The directory is created on first use.
 .SS Playlist commands
 .TP
 .BI "vyt playlist add " name
@@ -92,32 +93,45 @@ Delete the playlist called
 .IR name .
 The file is removed; songs are not recoverable.
 .TP
-.BI "vyt playlist song add " "name url"
+.BI "vyt playlist song add " "playlist song_name url"
 Append
 .I url
 to playlist
-.IR name .
-Duplicates are rejected.
-Both
-.I name
+.I playlist
+with the user-provided
+.I song_name
+as the displayed title.
+Duplicates (by URL) are rejected; the URL remains the canonical
+identifier for the song.
+All of
+.IR playlist ,
+.IR song_name ,
 and
 .I url
 are validated; see
 .B FILES
-for the file naming rules.
+for the file naming rules and
+.B "SONG NAMES"
+for the song name rules.
 .TP
-.BI "vyt playlist song remove " "name url"
+.BI "vyt playlist song remove " "playlist url"
 Remove the first occurrence of
 .I url
 from playlist
-.IR name .
+.IR playlist .
+The match is by URL, not by name, so a single song can be removed
+without ambiguity even if other songs share the same name.
 It is not an error if the URL appears more than once; only the first
 match is removed.
 .TP
-.BI "vyt playlist song list " name
-Print every URL in playlist
-.IR name ,
-one per line, in the order they were added.
+.BI "vyt playlist song list " playlist
+Print every song in playlist
+.IR playlist ,
+one per line, in the form
+.RB ` "song_name = url" .
+Songs without a name (legacy entries from older versions of
+.BR vyt )
+are printed as just the URL.
 .TP
 .BI "vyt playlist play " name
 Play playlist
@@ -129,6 +143,8 @@ in random order, using
 When more than one song is present,
 .B vyt
 never picks the same song twice in a row.
+The song name is shown in the "now playing" line if present, otherwise
+the URL is shown.
 Playback continues indefinitely until interrupted; see
 .B SIGNALS
 below.
@@ -152,6 +168,27 @@ or
 .BR .. .
 A playlist name becomes a filename, so these rules keep it inside the
 playlists directory.
+.TP
+Song names may be at most 256 bytes, must not be empty (or only
+whitespace), and must not contain control characters (newline,
+carriage return, etc.). Spaces and the
+.B =
+character are allowed; the storage line
+.RB ` "song_name = url" '
+is split at the
+.I last
+.RB ` " = " '
+separator, so a name like
+.RB ` "Song = Cool" '
+round-trips correctly because the URL portion is whitespace-free.
+.SS Song names
+A song name must be between 1 and 256 bytes, must contain at least one
+non-whitespace character, and must not contain control characters. A
+song name with leading or trailing whitespace is accepted (the storage
+format is whitespace-aware); one made only of whitespace is rejected.
+Song names are stored verbatim alongside the URL; the URL remains the
+canonical identifier used for duplicate detection, removal, and
+playback.
 .TP
 Writes are atomic: a new playlist is written to a hidden temporary file
 in the same directory,
@@ -194,7 +231,8 @@ its exit status is that of the underlying process.
 For playlist commands,
 .B vyt
 exits 0 on success and 1 on any error (missing playlist, duplicate URL,
-invalid name, filesystem failure, etc.).
+invalid playlist name, invalid song name, malformed URL, filesystem
+failure, etc.).
 .PP
 Stopping playback with Ctrl+C is considered normal termination, not an
 error: the exit status is 0.
