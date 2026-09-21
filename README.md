@@ -45,13 +45,13 @@ Options:
   -h        Show this message :D
 
 Playlist:
-  vyt playlist add <name>            Create a new playlist
-  vyt playlist list                  List all playlists
-  vyt playlist remove <name>         Remove a playlist
-  vyt playlist song add <p> <url>    Add a URL to a playlist
-  vyt playlist song remove <p> <url>  Remove a URL from a playlist
-  vyt playlist song list <p>         List songs in a playlist
-  vyt playlist play <p>              Play a playlist shuffled forever
+  vyt playlist add <name>                          Create a new playlist
+  vyt playlist list                                List all playlists
+  vyt playlist remove <name>                       Remove a playlist
+  vyt playlist song add <p> <song_name> <url>      Add a named song to a playlist
+  vyt playlist song remove <p> <url>               Remove a URL from a playlist
+  vyt playlist song list <p>                       List songs in a playlist
+  vyt playlist play <p>                            Play a playlist shuffled forever
 ```
 
 See `man vyt` for the full manual page.
@@ -73,7 +73,8 @@ vyt -s "Purgatori"
 
 `vyt` keeps persistent playlists as plain text files under
 `~/.config/vyt/playlists/`. Each playlist is one file, each song is one
-line, and songs must be `http://` or `https://` URLs.
+line in the form `song_name = url`, and songs' URLs must be `http://`
+or `https://`.
 
 If `XDG_CONFIG_HOME` is set and absolute, playlists live under
 `$XDG_CONFIG_HOME/vyt/playlists/` instead useful for keeping your
@@ -92,7 +93,7 @@ vyt playlist list
 vyt playlist remove my-playlist
 
 # Add a URL to a playlist (duplicates are rejected)
-vyt playlist song add my-playlist https://youtu.be/abc
+vyt playlist song add my-playlist "Nightcall" https://youtu.be/abc
 
 # Remove a URL from a playlist
 vyt playlist song remove my-playlist https://youtu.be/abc
@@ -129,10 +130,17 @@ Playlists are plain text, so you can edit them directly:
 $EDITOR ~/.config/vyt/playlists/chill
 ```
 
-Each line should be one URL. Blank lines and leading/trailing whitespace
-are ignored on load. Lines that don't start with `http://` or `https://`
-are rejected at playback time with the line number, so you'll see
-exactly which entry to fix.
+Each line is one song, in the form `song_name = url`. Song names may
+contain spaces and even `=` characters; the parser splits on the *last*
+` = ` in the line, so a name like `Song = Cool` round-trips correctly.
+Lines that don't contain ` = ` are treated as bare URLs (legacy entries
+written by older versions of `vyt`); they are loaded with an empty name
+and displayed as just the URL.
+
+Blank lines and leading/trailing whitespace are ignored on load. The
+URL portion must start with `http://` or `https://` and contain no
+whitespace; lines that fail this check at playback time are reported
+with their line number, so you'll see exactly which entry to fix.
 
 ### Storage layout
 
@@ -146,9 +154,9 @@ exactly which entry to fix.
 Each file looks like:
 
 ```
-https://youtu.be/AAAA
-https://youtu.be/BBBB
-https://youtu.be/CCCC
+Nightcall = https://youtu.be/AAAA
+Teardrop = https://youtu.be/BBBB
+Focus = https://youtu.be/CCCC
 ```
 
 `vyt` creates the playlists directory on first use with `mkdir -p`
