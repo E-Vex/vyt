@@ -32,7 +32,7 @@ void playlist_cmd_print_usage(FILE *stream)
             "  vyt playlist list\n"
             "  vyt playlist remove <name>\n"
             "  vyt playlist play <name>\n"
-            "  vyt playlist song add <playlist> <url>\n"
+            "  vyt playlist song add <playlist> <song_name> <url>\n"
             "  vyt playlist song remove <playlist> <url>\n"
             "  vyt playlist song list <playlist>\n");
 }
@@ -144,25 +144,33 @@ static int cmd_list(int argc, char **argv)
 
 static int cmd_song_add(int argc, char **argv)
 {
-    if (argc != 2)
+    if (argc != 3)
     {
-        return usage_error("playlist song add", "a playlist name and one URL");
+        return usage_error("playlist song add",
+                           "a playlist name, a song name, and one URL");
     }
 
     const char *name = argv[0];
-    const char *url = argv[1];
+    const char *song_name = argv[1];
+    const char *url = argv[2];
 
-    pl_status_t status = playlist_song_add(name, url);
+    pl_status_t status = playlist_song_add(name, song_name, url);
     if (status != PL_OK)
     {
-        /* Name the thing that is wrong: the playlist or the URL. */
-        const char *subject = (status == PL_ERR_URL || status == PL_ERR_DUPLICATE)
-                                  ? url
-                                  : name;
+        /* Name the thing that is wrong: the playlist, the song name, or the URL. */
+        const char *subject = name;
+        if (status == PL_ERR_URL || status == PL_ERR_DUPLICATE)
+        {
+            subject = url;
+        }
+        else if (status == PL_ERR_SONG_NAME)
+        {
+            subject = song_name;
+        }
         return report(subject, status);
     }
 
-    printf("added to '%s': %s\n", name, url);
+    printf("added to '%s': %s = %s\n", name, song_name, url);
     return 0;
 }
 
@@ -205,7 +213,9 @@ static int cmd_song_list(int argc, char **argv)
 
     if (pl.count == 0)
     {
-        fprintf(stderr, "vyt: '%s' has no songs yet (add one with 'vyt playlist song add %s <url>')\n",
+        fprintf(stderr,
+                "vyt: '%s' has no songs yet "
+                "(add one with 'vyt playlist song add %s <song_name> <url>')\n",
                 name, name);
         playlist_free(&pl);
         return 0;
@@ -213,7 +223,17 @@ static int cmd_song_list(int argc, char **argv)
 
     for (size_t i = 0; i < pl.count; i++)
     {
-        printf("%s\n", pl.songs[i]);
+        /* A song without a name is a legacy entry from a previous version
+         * of vyt; print the URL alone so the listing stays parseable and
+         * useful.  New entries always have a name. */
+        if (pl.songs[i].name == NULL || pl.songs[i].name[0] == '\0')
+        {
+            printf("%s\n", pl.songs[i].url);
+        }
+        else
+        {
+            printf("%s = %s\n", pl.songs[i].name, pl.songs[i].url);
+        }
     }
 
     playlist_free(&pl);
@@ -403,7 +423,7 @@ static int cmd_play(int argc, char **argv)
          * session.  Tell the user how to populate it and exit cleanly. */
         fprintf(stderr,
                 "vyt: playlist '%s' is empty "
-                "(add songs with 'vyt playlist song add %s <url>')\n",
+                "(add songs with 'vyt playlist song add %s <song_name> <url>')\n",
                 name, name);
         playlist_free(&pl);
         return 0;
@@ -416,11 +436,11 @@ static int cmd_play(int argc, char **argv)
      * as one built via the CLI. */
     for (size_t i = 0; i < pl.count; i++)
     {
-        if (playlist_check_url(pl.songs[i]) != PL_OK)
+        if (playlist_check_url(pl.songs[i].url) != PL_OK)
         {
             fprintf(stderr,
                     "vyt: error: %s: line %zu: '%s' is not a valid URL\n",
-                    name, i + 1, pl.songs[i]);
+                    name, i + 1, pl.songs[i].url);
             playlist_free(&pl);
             return 1;
         }
@@ -449,10 +469,21 @@ static int cmd_play(int argc, char **argv)
     while (!g_should_stop)
     {
         size_t idx = pick_next_index(pl.count, previous);
-        const char *url = pl.songs[idx];
+        const char *url = pl.songs[idx].url;
+        const char *song_name = pl.songs[idx].name;
 
-        printf("vyt: now playing [%zu/%zu]: %s\n",
-               idx + 1, pl.count, url);
+        /* Show the song name if there is one; fall back to the URL for
+         * legacy entries so the user still sees what is playing. */
+        if (song_name != NULL && song_name[0] != '\0')
+        {
+            printf("vyt: now playing [%zu/%zu]: %s\n",
+                   idx + 1, pl.count, song_name);
+        }
+        else
+        {
+            printf("vyt: now playing [%zu/%zu]: %s\n",
+                   idx + 1, pl.count, url);
+        }
         fflush(stdout);
 
         int rc = player_play_music(url);

@@ -32,6 +32,8 @@ const char *playlist_strerror(pl_status_t status)
         return "success";
     case PL_ERR_NAME:
         return "invalid playlist name";
+    case PL_ERR_SONG_NAME:
+        return "invalid song name";
     case PL_ERR_URL:
         return "invalid URL";
     case PL_ERR_NOT_FOUND:
@@ -388,7 +390,7 @@ void playlist_list_free(char **names, size_t count)
 }
 
 /* ========================================================================= */
-/* SONG-LEVEL OPERATIONS                                                     */
+/* VALIDATORS                                                                 */
 /* ========================================================================= */
 
 pl_status_t playlist_check_url(const char *url)
@@ -424,14 +426,59 @@ pl_status_t playlist_check_url(const char *url)
     return PL_OK;
 }
 
-/* Append an already-owned string to the in-memory playlist.
- * On failure the caller still owns the string. */
-static pl_status_t songs_push(playlist_t *pl, char *url)
+pl_status_t playlist_check_song_name(const char *name)
+{
+    if (name == NULL || name[0] == '\0')
+    {
+        return PL_ERR_SONG_NAME;
+    }
+
+    size_t len = strlen(name);
+    if (len > PL_SONG_NAME_MAX)
+    {
+        return PL_ERR_SONG_NAME;
+    }
+
+    /* A name made only of whitespace would look like a blank line once
+     * written to disk, so reject it here. */
+    int has_nonblank = 0;
+    for (size_t i = 0; i < len; i++)
+    {
+        unsigned char c = (unsigned char)name[i];
+        /* Newlines would break the one-song-per-line storage format, and
+         * other control characters are not something a song title should
+         * contain. */
+        if (c < 0x20 || c == 0x7f)
+        {
+            return PL_ERR_SONG_NAME;
+        }
+        if (c != ' ' && c != '\t')
+        {
+            has_nonblank = 1;
+        }
+    }
+
+    if (!has_nonblank)
+    {
+        return PL_ERR_SONG_NAME;
+    }
+
+    return PL_OK;
+}
+
+/* ========================================================================= */
+/* SONG-LEVEL OPERATIONS                                                     */
+/* ========================================================================= */
+
+/* Append one {name,url} pair to the in-memory playlist.
+ * Both strings are taken as already-owned; on failure the caller still owns
+ * them and must free them. */
+static pl_status_t songs_push(playlist_t *pl, char *name, char *url)
 {
     if (pl->count == pl->capacity)
     {
         size_t new_capacity = (pl->capacity == 0) ? 8 : pl->capacity * 2;
-        char **grown = realloc(pl->songs, new_capacity * sizeof *grown);
+        song_t *grown = realloc(pl->songs, new_capacity * sizeof *grown);
         if (grown == NULL)
         {
             return PL_ERR_MEMORY;
@@ -440,7 +487,8 @@ static pl_status_t songs_push(playlist_t *pl, char *url)
         pl->capacity = new_capacity;
     }
 
-    pl->songs[pl->count] = url;
+    pl->songs[pl->count].name = name;
+    pl->songs[pl->count].url = url;
     pl->count++;
     return PL_OK;
 }
@@ -465,6 +513,62 @@ static char *trim(char *s)
     }
 
     return s;
+}
+
+/*
+ * Split a stored line into {name, url}.
+ *
+ * Storage format is "<name> = <url>\n".  Because playlist_check_url() rejects
+ * any byte <= 0x20 inside a URL, the URL portion can never contain a space,
+ * so the LAST " = " in a line is unambiguously the separator -- a song name
+ * that itself contains " = " still splits correctly, because everything to
+ * the right of the final " = " must be the URL.
+ *
+ * For backward compatibility with playlists written by previous versions of
+ * vyt (URL-per-line, no name), a line without any " = " is treated as a URL
+ * with an empty name.
+ *
+ * Returns 1 if a separator was found (new format), 0 if not (legacy URL-only
+ * format).  On return, *name_out and *url_out point into the buffer (which
+ * has been mutated in place) and are NUL-terminated.
+ */
+static int split_song_line(char *line, char **name_out, char **url_out)
+{
+    /* Walk from the end so a name containing " = " splits at the LAST
+     * occurrence, which is the only one that can be the real boundary. */
+    size_t len = strlen(line);
+    char *sep = NULL;
+    for (size_t i = len; i >= 3; i--)
+    {
+        if (line[i - 1] == ' ' && line[i - 2] == '=' && line[i - 3] == ' ')
+        {
+            sep = &line[i - 3];
+            break;
+        }
+    }
+
+    if (sep != NULL)
+    {
+        *sep = '\0';                  /* truncate name side */
+        *name_out = line;             /* name is the left part (already trimmed) */
+        *url_out = sep + 3;           /* URL is whatever follows " = " */
+
+        /* The URL side may still have trailing whitespace from the line; the
+         * caller has already trimmed the line, so this is normally a no-op,
+         * but be defensive in case the file was hand-edited. */
+        size_t url_len = strlen(*url_out);
+        while (url_len > 0 && ((*url_out)[url_len - 1] == ' ' ||
+                               (*url_out)[url_len - 1] == '\t'))
+        {
+            (*url_out)[--url_len] = '\0';
+        }
+        return 1;
+    }
+
+    /* Legacy URL-only line. */
+    *name_out = (char *)"";
+    *url_out = line;
+    return 0;
 }
 
 pl_status_t playlist_load(const char *name, playlist_t *out)
@@ -492,23 +596,49 @@ pl_status_t playlist_load(const char *name, playlist_t *out)
 
     while ((n = getline(&line, &cap, fp)) != -1)
     {
-        char *url = trim(line);
-        if (url[0] == '\0')
+        char *trimmed = trim(line);
+        if (trimmed[0] == '\0')
         {
             continue; /* blank line left by a hand edit */
         }
 
-        char *copy = strdup(url);
-        if (copy == NULL)
+        char *song_name_buf = NULL;
+        char *url_buf = NULL;
+        (void)split_song_line(trimmed, &song_name_buf, &url_buf);
+
+        /* The URL is the canonical identifier; reject the line if it is not
+         * a valid URL.  This is the same check the song-add path makes, so
+         * a hand-edited file gets the same treatment as one built via CLI. */
+        if (playlist_check_url(url_buf) != PL_OK)
+        {
+            /* Skip malformed line rather than poison the whole playlist; the
+             * playback path will re-check and report the exact line. */
+            continue;
+        }
+
+        char *url_copy = strdup(url_buf);
+        if (url_copy == NULL)
         {
             status = PL_ERR_MEMORY;
             break;
         }
 
-        status = songs_push(out, copy);
+        /* song_name_buf may be a pointer into the line buffer (the new-format
+         * case) or a pointer to a static "" (the legacy case); either way we
+         * need an owned copy so playlist_free can free() it uniformly. */
+        char *name_copy = strdup(song_name_buf);
+        if (name_copy == NULL)
+        {
+            free(url_copy);
+            status = PL_ERR_MEMORY;
+            break;
+        }
+
+        status = songs_push(out, name_copy, url_copy);
         if (status != PL_OK)
         {
-            free(copy);
+            free(name_copy);
+            free(url_copy);
             break;
         }
     }
@@ -541,7 +671,8 @@ void playlist_free(playlist_t *pl)
 
     for (size_t i = 0; i < pl->count; i++)
     {
-        free(pl->songs[i]);
+        free(pl->songs[i].name);
+        free(pl->songs[i].url);
     }
     free(pl->songs);
 
@@ -597,11 +728,29 @@ static pl_status_t playlist_store(const char *name, const playlist_t *pl)
 
     for (size_t i = 0; i < pl->count; i++)
     {
-        if (fprintf(fp, "%s\n", pl->songs[i]) < 0)
+        const char *song_name = pl->songs[i].name;
+        const char *url = pl->songs[i].url;
+
+        /* Songs without a name (legacy entries loaded from an old playlist
+         * that we are now rewriting) are stored as URL-only lines so the
+         * file round-trips back to the same in-memory state. */
+        if (song_name == NULL || song_name[0] == '\0')
         {
-            fclose(fp);
-            unlink(tmp);
-            return PL_ERR_IO;
+            if (fprintf(fp, "%s\n", url) < 0)
+            {
+                fclose(fp);
+                unlink(tmp);
+                return PL_ERR_IO;
+            }
+        }
+        else
+        {
+            if (fprintf(fp, "%s = %s\n", song_name, url) < 0)
+            {
+                fclose(fp);
+                unlink(tmp);
+                return PL_ERR_IO;
+            }
         }
     }
 
@@ -629,9 +778,16 @@ static pl_status_t playlist_store(const char *name, const playlist_t *pl)
     return PL_OK;
 }
 
-pl_status_t playlist_song_add(const char *name, const char *url)
+pl_status_t playlist_song_add(const char *name, const char *song_name,
+                              const char *url)
 {
-    pl_status_t status = playlist_check_url(url);
+    pl_status_t status = playlist_check_song_name(song_name);
+    if (status != PL_OK)
+    {
+        return status;
+    }
+
+    status = playlist_check_url(url);
     if (status != PL_OK)
     {
         return status;
@@ -645,26 +801,37 @@ pl_status_t playlist_song_add(const char *name, const char *url)
         return status;
     }
 
+    /* URLs are the canonical identifier; reject duplicates by URL, not by
+     * name, so the same track can't appear twice even under two names. */
     for (size_t i = 0; i < pl.count; i++)
     {
-        if (strcmp(pl.songs[i], url) == 0)
+        if (strcmp(pl.songs[i].url, url) == 0)
         {
             playlist_free(&pl);
             return PL_ERR_DUPLICATE;
         }
     }
 
-    char *copy = strdup(url);
-    if (copy == NULL)
+    char *name_copy = strdup(song_name);
+    if (name_copy == NULL)
     {
         playlist_free(&pl);
         return PL_ERR_MEMORY;
     }
 
-    status = songs_push(&pl, copy);
+    char *url_copy = strdup(url);
+    if (url_copy == NULL)
+    {
+        free(name_copy);
+        playlist_free(&pl);
+        return PL_ERR_MEMORY;
+    }
+
+    status = songs_push(&pl, name_copy, url_copy);
     if (status != PL_OK)
     {
-        free(copy);
+        free(name_copy);
+        free(url_copy);
         playlist_free(&pl);
         return status;
     }
@@ -691,7 +858,7 @@ pl_status_t playlist_song_remove(const char *name, const char *url)
     size_t index = pl.count;
     for (size_t i = 0; i < pl.count; i++)
     {
-        if (strcmp(pl.songs[i], url) == 0)
+        if (strcmp(pl.songs[i].url, url) == 0)
         {
             index = i;
             break;
@@ -704,7 +871,8 @@ pl_status_t playlist_song_remove(const char *name, const char *url)
         return PL_ERR_NO_SONG;
     }
 
-    free(pl.songs[index]);
+    free(pl.songs[index].name);
+    free(pl.songs[index].url);
     for (size_t i = index + 1; i < pl.count; i++)
     {
         pl.songs[i - 1] = pl.songs[i];
