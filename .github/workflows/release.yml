@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build
+        run: make
+
+      - name: Run tests
+        run: make test
+
+      - name: Package
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir "vyt-${VERSION}"
+          cp vyt README.md LICENSE "vyt-${VERSION}/"
+          tar czf "vyt-${VERSION}-x86_64-linux.tar.gz" "vyt-${VERSION}"
+          sha256sum "vyt-${VERSION}-x86_64-linux.tar.gz" > sha256sums.txt
+
+      - name: Attach assets to the release
+        run: |
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" \
+              vyt-*-x86_64-linux.tar.gz sha256sums.txt --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --title "vyt ${GITHUB_REF_NAME#v}" \
+              --generate-notes \
+              vyt-*-x86_64-linux.tar.gz sha256sums.txt
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
