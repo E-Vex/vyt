@@ -195,4 +195,4 @@ rm -rf ~/.config/vyt/playlists
 
 ## LICENSE
 
-[![License: MIT](https://img.shields.io/github/license/gcla/termshark.svg?color=yellow)](LICENSE)
+[![License: MIT](https://img.shields.io/github/license/E-Vex/vyt.svg?color=yellow)](LICENSE)
