@@ -430,16 +430,18 @@ static int cmd_play(int argc, char **argv)
     }
 
     /* Validate every URL before playing the first one.  This way the user
-     * doesn't sit through three songs only to discover line 4 was malformed.
-     * We use playlist_check_url(), which is exactly the same validator the
-     * `song add` path uses, so a hand-edited file gets the same treatment
-     * as one built via the CLI. */
+     * doesn't sit through three songs only to discover the fourth was
+     * malformed.  We use playlist_check_url(), which is exactly the same
+     * validator the `song add` path uses, so a hand-edited file gets the
+     * same treatment as one built via the CLI.  (In practice playlist_load()
+     * already skipped and warned about invalid lines, so this is a
+     * belt-and-braces check over the in-memory copy.) */
     for (size_t i = 0; i < pl.count; i++)
     {
         if (playlist_check_url(pl.songs[i].url) != PL_OK)
         {
             fprintf(stderr,
-                    "vyt: error: %s: line %zu: '%s' is not a valid URL\n",
+                    "vyt: error: %s: entry %zu: '%s' is not a valid URL\n",
                     name, i + 1, pl.songs[i].url);
             playlist_free(&pl);
             return 1;
