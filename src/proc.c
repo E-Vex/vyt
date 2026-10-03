@@ -1,6 +1,7 @@
 #define _POSIX_C_SOURCE 200809L
 
 #include <errno.h>
+#include <signal.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -59,8 +60,20 @@ int proc_run(const char *program, char *const argv[])
 
     if (WIFSIGNALED(status))
     {
-        fprintf(stderr, "vyt: error: '%s' was terminated by signal %d (%s)\n", program, WTERMSIG(status), strsignal(WTERMSIG(status)));
-        return -2;
+        int sig = WTERMSIG(status);
+
+        /* SIGINT/SIGTERM are the normal ways a user stops playback (Ctrl+C
+         * delivers SIGINT to the whole foreground process group, mpv dies,
+         * and we end up here).  Reporting that as a scary "terminated by
+         * signal" error turns a routine action into a failure message, so
+         * stay quiet and follow the conventional 128+signal exit status. */
+        if (sig == SIGINT || sig == SIGTERM)
+        {
+            return 128 + sig;
+        }
+
+        fprintf(stderr, "vyt: error: '%s' was terminated by signal %d (%s)\n", program, sig, strsignal(sig));
+        return 128 + sig;
     }
 
     return -1;
