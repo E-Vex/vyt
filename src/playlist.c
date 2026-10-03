@@ -597,9 +597,12 @@ pl_status_t playlist_load(const char *name, playlist_t *out)
     char *line = NULL;
     size_t cap = 0;
     ssize_t n;
+    size_t lineno = 0;
 
     while ((n = getline(&line, &cap, fp)) != -1)
     {
+        lineno++;
+
         char *trimmed = trim(line);
         if (trimmed[0] == '\0')
         {
@@ -608,15 +611,26 @@ pl_status_t playlist_load(const char *name, playlist_t *out)
 
         char *song_name_buf = NULL;
         char *url_buf = NULL;
-        (void)split_song_line(trimmed, &song_name_buf, &url_buf);
+        int has_sep = split_song_line(trimmed, &song_name_buf, &url_buf);
 
         /* The URL is the canonical identifier; reject the line if it is not
          * a valid URL.  This is the same check the song-add path makes, so
          * a hand-edited file gets the same treatment as one built via CLI. */
         if (playlist_check_url(url_buf) != PL_OK)
         {
-            /* Skip malformed line rather than poison the whole playlist; the
-             * playback path will re-check and report the exact line. */
+            /* Skipping keeps one bad hand-edit from poisoning the whole
+             * playlist, but silently swallowing the line would make the
+             * song vanish without a trace.  Report the exact file line so
+             * the user knows precisely which entry to fix.  The split above
+             * truncated the buffer at the separator, so put the ' ' of the
+             * " = " back first to show the full original entry. */
+            if (has_sep)
+            {
+                url_buf[-3] = ' ';
+            }
+            fprintf(stderr,
+                    "vyt: warning: %s: line %zu: skipping invalid entry '%s'\n",
+                    path, lineno, trimmed);
             continue;
         }
 

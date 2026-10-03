@@ -139,8 +139,8 @@ and displayed as just the URL.
 
 Blank lines and leading/trailing whitespace are ignored on load. The
 URL portion must start with `http://` or `https://` and contain no
-whitespace; lines that fail this check at playback time are reported
-with their line number, so you'll see exactly which entry to fix.
+whitespace; lines that fail this check are reported with their line
+number and skipped on load, so you'll see exactly which entry to fix.
 
 ### Storage layout
 
