@@ -1,3 +1,4 @@
 vyt
 *.o
-tests
+tests/test_cli
+tests/test_playlist
