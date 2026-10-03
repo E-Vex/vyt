@@ -793,6 +793,17 @@ static pl_status_t playlist_store(const char *name, const playlist_t *pl)
         return PL_ERR_IO;
     }
 
+    /* Persist the rename itself: on some filesystems a crash right after
+     * rename() can still lose the directory entry, leaving the old file
+     * (or nothing) behind.  Best effort -- the rename already succeeded,
+     * and a few filesystems refuse fsync() on directories. */
+    int dfd = open(dir, O_RDONLY | O_DIRECTORY);
+    if (dfd >= 0)
+    {
+        (void)fsync(dfd);
+        close(dfd);
+    }
+
     return PL_OK;
 }
 
