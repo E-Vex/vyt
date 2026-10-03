@@ -20,6 +20,7 @@ int search_youtube(const char *query) {
         "yt-dlp",
         "--flat-playlist",
         "--print", "%(title)s | %(webpage_url)s",
+        "--",
         search_term,
         NULL
     };
