@@ -167,13 +167,17 @@ static pl_status_t check_name(const char *name)
         return PL_ERR_NAME;
     }
 
-    if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)
+    size_t len = strlen(name);
+    if (len > PL_NAME_MAX)
     {
         return PL_ERR_NAME;
     }
 
-    size_t len = strlen(name);
-    if (len > PL_NAME_MAX)
+    /* A leading dot is rejected for two reasons: ".", ".." are directory
+     * entries, and any other dotfile would be silently skipped by
+     * playlist_list(), producing a "ghost" playlist that can be played
+     * but never seen or managed. */
+    if (name[0] == '.')
     {
         return PL_ERR_NAME;
     }

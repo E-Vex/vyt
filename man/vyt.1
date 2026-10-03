@@ -162,10 +162,14 @@ is set and absolute.
 .TP
 Playlist names may be at most 64 bytes, must not contain
 .BR / ,
-control characters, leading or trailing whitespace, or be
+control characters, leading or trailing whitespace, or begin with a
+dot (this covers
 .B .
-or
-.BR .. .
+and
+.BR .. ,
+and prevents creating playlists that
+.B "vyt playlist list"
+would never show).
 A playlist name becomes a filename, so these rules keep it inside the
 playlists directory.
 .TP
