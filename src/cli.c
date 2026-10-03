@@ -66,7 +66,7 @@ int cli_parse(int argc, char **argv, options_t *opts)
         return 0;
     }
 
-    mode_t mode = MODE_NONE;
+    cli_mode_t mode = MODE_NONE;
     char *argument = NULL;
 
     opterr = 0;

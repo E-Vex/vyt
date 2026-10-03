@@ -3,7 +3,9 @@
 
 #include <stdio.h>
 
-/* The mode the user requested on the command line. */
+/* The mode the user requested on the command line.
+ * Note the cli_ prefix: a bare "mode_t" would collide with the POSIX type
+ * of the same name the moment a translation unit includes <sys/types.h>. */
 typedef enum
 {
     MODE_NONE,    /* nothing selected */
@@ -13,12 +15,12 @@ typedef enum
     MODE_HELP,    /* -h */
     MODE_VERSION, /* -V */
     MODE_PLAYLIST /* `vyt playlist ...` subcommand tree */
-} mode_t;
+} cli_mode_t;
 
 typedef struct
 {
-    mode_t mode;
-    char *argument; /* URL for -m/-v, search query for -s, NULL for -h */
+    cli_mode_t mode;
+    char *argument; /* URL for -m/-v, search query for -s, NULL for -h/-V */
 } options_t;
 
 void cli_print_usage(FILE *stream);
