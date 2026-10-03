@@ -8,7 +8,7 @@
 and [`mpv`](https://mpv.io/) that makes searching, playing and organising
 YouTube media fast & simple from the terminal.
 
-`vyt` never shells out through `system()` commands run via `fork` +
+`vyt` never shells out through `system()`; commands run via `fork` +
 `execvp`, so URLs and search queries are passed as arguments, not
 interpolated into a shell string.
 
@@ -77,7 +77,7 @@ line in the form `song_name = url`, and songs' URLs must be `http://`
 or `https://`.
 
 If `XDG_CONFIG_HOME` is set and absolute, playlists live under
-`$XDG_CONFIG_HOME/vyt/playlists/` instead useful for keeping your
+`$XDG_CONFIG_HOME/vyt/playlists/` instead, useful for keeping your
 config separate from your home directory or for tests.
 
 ### Playlist commands
