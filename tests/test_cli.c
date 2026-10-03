@@ -27,7 +27,7 @@ static int run_parse(char *argv[], options_t *opts)
     {
         argc++;
     }
-    optind = 1; /* reset getopt state between test cases */
+    optind = 0; /* portable full reset of getopt state between test cases */
     return cli_parse(argc, argv, opts);
 }
 
