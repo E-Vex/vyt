@@ -1,6 +1,7 @@
 CC       ?= gcc
 CFLAGS   ?= -Wall -Wextra -Wpedantic -std=c17 -O2
 SRC      := $(wildcard src/*.c)
+HDRS     := $(wildcard src/*.h)
 TARGET   := vyt
 
 # Each test binary links only the source files it actually exercises.
@@ -33,7 +34,9 @@ banner:
 	@printf "$(RESET)"
 	@printf "$(YELLOW)  building...$(RESET)\n\n"
 
-$(TARGET): $(SRC)
+# Headers are explicit dependencies: editing a .h re-rebuilds everything
+# that could include it, instead of leaving a stale binary behind.
+$(TARGET): $(SRC) $(HDRS)
 	@printf "$(CYAN)  CC$(RESET)  %s\n" "$(SRC)"
 	@$(CC) $(CFLAGS) $(SRC) -o $(TARGET)
 
@@ -44,11 +47,11 @@ test: banner $(TEST_BINS)
 		./$$bin || exit 1; \
 	done
 
-$(TEST_CLI_BIN): $(TEST_CLI_SRC)
+$(TEST_CLI_BIN): $(TEST_CLI_SRC) src/cli.h src/version.h
 	@printf "$(CYAN)  CC$(RESET)  %s\n" "$(TEST_CLI_SRC)"
 	@$(CC) $(CFLAGS) $(TEST_CLI_SRC) -o $(TEST_CLI_BIN)
 
-$(TEST_PL_BIN): $(TEST_PL_SRC)
+$(TEST_PL_BIN): $(TEST_PL_SRC) src/playlist.h
 	@printf "$(CYAN)  CC$(RESET)  %s\n" "$(TEST_PL_SRC)"
 	@$(CC) $(CFLAGS) $(TEST_PL_SRC) -o $(TEST_PL_BIN)
 
