@@ -15,6 +15,7 @@ void cli_print_usage(FILE *stream)
             "  vyt -v URL\n"
             "  vyt -s QUERY\n"
             "  vyt playlist <command> ...\n"
+            "  vyt -V\n"
             "  vyt -h\n");
 }
 
@@ -34,13 +35,13 @@ void cli_print_help(void)
         "  vyt playlist add <name>                        Create a new playlist\n"
         "  vyt playlist list                              List all playlists\n"
         "  vyt playlist remove <name>                     Remove a playlist\n"
-        "  vyt playlist song add <p> <song_name> <url>   Add a named song to a playlist\n"
-        "  vyt playlist song remove <p> <url>            Remove a URL from a playlist\n"
-        "  vyt playlist song list <p>                    List songs in a playlist\n"
+        "  vyt playlist song add <p> <song_name> <url>    Add a named song to a playlist\n"
+        "  vyt playlist song remove <p> <url>             Remove a URL from a playlist\n"
+        "  vyt playlist song list <p>                     List songs in a playlist\n"
         "  vyt playlist play <p>                          Play a playlist shuffled forever\n"
         "\n"
         "vyt requires yt-dlp and mpv.\n"
-        "Make sure you have the latest versions installed and available on your PATH..\n");
+        "Make sure you have the latest versions installed and available on your PATH.\n");
 }
 
 void cli_print_version(void)
