@@ -117,10 +117,13 @@ static void test_proc_run_status(void)
           "run: missing binary reports 127");
 }
 
-static void run_killed_by_signal(void *user)
+/* Run the program named by argv[0] with the given argument vector.  argv[0]
+ * must match the program name, mirroring the execvp() convention that
+ * proc_run() itself follows (proc_run("sh", {"sh", "-c", ...})). */
+static void run_child(void *user)
 {
     char **argv = user;
-    proc_run("sh", argv);
+    proc_run(argv[0], argv);
 }
 
 static void test_proc_run_signals(void)
@@ -145,13 +148,13 @@ static void test_proc_run_no_diagnositics_on_normal_paths(void)
 {
     /* A clean run and a clean Ctrl+C stop must not print anything. */
     char *term_argv[] = {"sh", "-c", "kill -TERM $$", NULL};
-    char *err = capture_stderr(run_killed_by_signal, term_argv);
+    char *err = capture_stderr(run_child, term_argv);
     CHECK(err != NULL && err[0] == '\0',
           "run: SIGTERM path stays silent (no scary error)");
     free(err);
 
     char *true_argv[] = {"true", NULL};
-    err = capture_stderr(run_killed_by_signal, true_argv);
+    err = capture_stderr(run_child, true_argv);
     CHECK(err != NULL && err[0] == '\0', "run: clean exit stays silent");
     free(err);
 }
