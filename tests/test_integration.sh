@@ -160,7 +160,7 @@ expect_err "Usage:" "no arguments prints usage" "$BIN"
 expect_status 0 "-h exits 0" "$BIN" -h
 expect_out "Options:" "-h shows options" "$BIN" -h
 expect_status 0 "-V exits 0" "$BIN" -V
-expect_out "vyt 1.2.0" "-V prints version" "$BIN" -V
+expect_out "vyt 1.3.0" "-V prints version" "$BIN" -V
 expect_status 1 "unknown option exits 1" "$BIN" -x
 expect_err "unknown option" "unknown option explains itself" "$BIN" -x
 expect_status 1 "empty -m argument exits 1" "$BIN" -m ""
