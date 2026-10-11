@@ -18,6 +18,7 @@
 /* ========================================================================= */
 /* LOCAL MODULES                                                             */
 /* ========================================================================= */
+#include "output.h"
 #include "playlist.h"
 
 /* ========================================================================= */
@@ -628,9 +629,11 @@ pl_status_t playlist_load(const char *name, playlist_t *out)
             {
                 url_buf[-3] = ' ';
             }
-            fprintf(stderr,
-                    "vyt: warning: %s: line %zu: skipping invalid entry '%s'\n",
-                    path, lineno, trimmed);
+            /* Name the playlist the user actually asked about rather than
+             * dumping the absolute path; `vyt playlist list` shows the same
+             * names, and the entry text is what needs fixing. */
+            out_warn(stderr, "'%s': line %zu: skipping invalid entry '%s'",
+                     name, lineno, trimmed);
             continue;
         }
 
