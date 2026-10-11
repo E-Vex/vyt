@@ -6,6 +6,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <unistd.h>
 
 #include "../src/playlist.h"
 
@@ -324,6 +325,17 @@ static void test_load_skips_malformed_lines(void)
     fputs("Also Good = https://example.com/ok\n", fp);
     fclose(fp);
 
+    /* Capture stderr so we can also assert the warning shape: it must
+     * name the playlist (not the absolute path) and the offending line. */
+    fflush(stderr);
+    int saved = dup(STDERR_FILENO);
+    FILE *cap = tmpfile();
+    CHECK(cap != NULL, "malformed: stderr capture opened");
+    if (cap != NULL)
+    {
+        dup2(fileno(cap), STDERR_FILENO);
+    }
+
     playlist_t pl;
     CHECK(playlist_load("t-malformed", &pl) == PL_OK, "malformed: load still succeeds");
     CHECK(pl.count == 2, "malformed: invalid lines skipped, valid ones kept");
@@ -333,6 +345,31 @@ static void test_load_skips_malformed_lines(void)
         CHECK_STREQ(pl.songs[1].name, "Also Good", "malformed: second valid entry");
     }
     playlist_free(&pl);
+
+    if (cap != NULL)
+    {
+        fflush(stderr);
+        dup2(saved, STDERR_FILENO);
+        close(saved);
+
+        long size = ftell(cap);
+        rewind(cap);
+        char *text = malloc((size_t)size + 1);
+        CHECK(text != NULL, "malformed: capture buffer allocated");
+        if (text != NULL)
+        {
+            size_t got = fread(text, 1, (size_t)size, cap);
+            text[got] = '\0';
+            CHECK(strstr(text, "'t-malformed': line 2: skipping invalid entry") != NULL,
+                  "malformed: warning names playlist and line number");
+            CHECK(strstr(text, "this line has no separator") != NULL,
+                  "malformed: warning quotes the bad entry");
+            CHECK(strstr(text, dir) == NULL,
+                  "malformed: warning does not dump the absolute path");
+            free(text);
+        }
+        fclose(cap);
+    }
 }
 
 static void test_missing_playlist(void)
