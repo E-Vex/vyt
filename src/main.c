@@ -8,12 +8,16 @@
 /* LOCAL MODULES                                                             */
 /* ========================================================================= */
 #include "cli.h"
+#include "output.h"
 #include "player.h"
 #include "playlist_cmd.h"
 #include "search.h"
 
 int main(int argc, char **argv)
 {
+    /* Pick up NO_COLOR / CLICOLOR / TERM before anything prints. */
+    out_init();
+
     if (argc == 1)
     {
         cli_print_usage(stderr);

@@ -139,6 +139,33 @@ static void test_trailing_positional_is_error(void)
     CHECK(rc == -1, "trailing positional: expected failure");
 }
 
+static void test_empty_music_argument_is_error(void)
+{
+    char *argv[] = {"vyt", "-m", "", NULL};
+    options_t opts;
+    int rc = run_parse(argv, &opts);
+
+    CHECK(rc == -1, "empty -m argument: expected failure");
+}
+
+static void test_empty_video_argument_is_error(void)
+{
+    char *argv[] = {"vyt", "-v", "", NULL};
+    options_t opts;
+    int rc = run_parse(argv, &opts);
+
+    CHECK(rc == -1, "empty -v argument: expected failure");
+}
+
+static void test_empty_search_argument_is_error(void)
+{
+    char *argv[] = {"vyt", "-s", "", NULL};
+    options_t opts;
+    int rc = run_parse(argv, &opts);
+
+    CHECK(rc == -1, "empty -s argument: expected failure");
+}
+
 int main(void)
 {
     test_music_mode();
@@ -152,6 +179,9 @@ int main(void)
     test_missing_argument_is_error();
     test_unknown_option_is_error();
     test_trailing_positional_is_error();
+    test_empty_music_argument_is_error();
+    test_empty_video_argument_is_error();
+    test_empty_search_argument_is_error();
 
     if (failures == 0)
     {

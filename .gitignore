@@ -2,3 +2,6 @@ vyt
 *.o
 tests/test_cli
 tests/test_playlist
+tests/test_output
+tests/test_proc
+tests/test_search
