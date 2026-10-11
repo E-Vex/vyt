@@ -48,10 +48,10 @@ Playlist:
   vyt playlist add <name>                          Create a new playlist
   vyt playlist list                                List all playlists
   vyt playlist remove <name>                       Remove a playlist
+  vyt playlist play <name>                         Play a playlist shuffled forever
   vyt playlist song add <p> <song_name> <url>      Add a named song to a playlist
   vyt playlist song remove <p> <url>               Remove a URL from a playlist
   vyt playlist song list <p>                       List songs in a playlist
-  vyt playlist play <p>                            Play a playlist shuffled forever
 ```
 
 See `man vyt` for the full manual page.
@@ -65,9 +65,61 @@ vyt -v "https://youtu.be/pahb4TugTkQ"
 # Play just the audio
 vyt -m "https://youtu.be/OgJ5bEg31Aw"
 
-# Search (prints the top 10 results as "title | URL")
+# Search (prints the top 10 results as a numbered list)
 vyt -s "Purgatori"
 ```
+
+## Terminal output
+
+Every message from `vyt` follows the same shape, so you can tell at a
+glance what happened:
+
+```
+vyt: ✓ created playlist 'chill'        success (green check mark)
+vyt: no playlists yet                  neutral status
+vyt: error: no playlist named 'nope'   failure (red label)
+vyt: warning: skipping entry '...'     recoverable problem (yellow label)
+vyt: hint: run 'vyt playlist list'     suggested next step (cyan label)
+```
+
+Errors say what failed and, when the cause is known, why — and most of
+them end with a `vyt: hint:` line containing a command you can copy and
+paste to move forward:
+
+```
+$ vyt playlist song add chill "Nightcall" https://youtu.be/AAAA
+vyt: error: cannot add to 'chill': https://youtu.be/AAAA is already in the playlist
+vyt: hint: remove it first with 'vyt playlist song remove chill https://youtu.be/AAAA'
+```
+
+### Colors
+
+Colors are enabled only when stdout/stderr is an interactive terminal,
+and can be controlled with the usual environment conventions:
+
+- `NO_COLOR` (non-empty): disables color entirely — wins over everything
+- `CLICOLOR_FORCE` (non-empty, not `0`): forces color even when piped
+- `CLICOLOR=0`: disables color
+- `TERM=dumb`: disables color
+
+With color off, output is plain text with the same wording — nothing is
+lost except the escapes.
+
+### Scriptable output
+
+When stdout is **not** a terminal (pipes, redirection, scripts), the
+listing commands switch to stable, easy-to-parse formats so existing
+shell scripts keep working unchanged:
+
+- `vyt -s QUERY` prints one `title | URL` line per result — exactly what
+  older versions printed — with no header or footer
+- `vyt playlist list` prints one playlist name per line, nothing else
+- `vyt playlist song list <p>` prints the storage format, one
+  `song_name = URL` line per song
+
+Messages, warnings, errors and hints always go to stderr (or, for
+success confirmations and playback status, to stdout), and exit codes
+are unchanged.
 
 ## Playlists
 
@@ -86,7 +138,7 @@ config separate from your home directory or for tests.
 # Create a new, empty playlist
 vyt playlist add my-playlist
 
-# List every playlist (sorted alphabetically)
+# List every playlist (sorted alphabetically, with song counts)
 vyt playlist list
 
 # Delete a playlist (the file is removed; songs are not recoverable)
@@ -100,6 +152,26 @@ vyt playlist song remove my-playlist https://youtu.be/abc
 
 # Show every song in a playlist
 vyt playlist song list my-playlist
+```
+
+### Listing output
+
+On a terminal, `vyt playlist list` aligns names in a column with song
+counts, and `vyt playlist song list` numbers each song with the URL on
+its own dimmed line, so long names and long URLs never fight for space:
+
+```
+$ vyt playlist list
+chill      3 songs
+focus      empty
+workout    12 songs
+
+$ vyt playlist song list chill
+2 songs in 'chill':
+1. Nightcall
+   https://youtu.be/AAAA
+2. Teardrop
+   https://youtu.be/BBBB
 ```
 
 ### Playing a playlist
@@ -183,6 +255,14 @@ have the old version or the new version, never a mix.
 ```sh
 make test
 ```
+
+This builds and runs the unit suites (CLI parsing, playlist storage,
+terminal-output formatting, subprocess handling, search formatting) and
+an integration suite that exercises the real binary end to end against
+stub `yt-dlp`/`mpv` executables — no network access is needed. The
+interactive (terminal-width) listing formats can additionally be
+checked through a pseudo-terminal with `VYT_TTY_TESTS=1 bash
+tests/test_integration.sh` where `script(1)` is available.
 
 ## Uninstall
 

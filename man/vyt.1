@@ -59,13 +59,88 @@ Search YouTube for
 .I QUERY
 via
 .BR yt-dlp ,
-printing the top 10 results as "title | URL".
+returning the top 10 results.  On a terminal the results are printed as
+a numbered list: a header naming the query and result count, one entry
+per result with the title, the duration and channel when yt-dlp
+provides them, and the URL on its own line, followed by a reminder of
+how to play a result.  When stdout is not a terminal, results are
+printed one per line as
+.RB ` "title | URL" '
+for scripting; see
+.B OUTPUT
+below.  A search that returns no results is not an error: vyt prints a
+note and exits 0.
 .TP
 .B \-V
 Print the version and exit.
 .TP
 .B \-h
 Show usage and exit.
+.SH OUTPUT
+.B vyt
+aims for output where every line has a purpose.  All messages share one
+shape:
+.PP
+.RS
+.nf
+vyt: ✓ created playlist 'chill'    success (green check mark)
+vyt: no playlists yet                 neutral status
+vyt: error: no playlist named 'nope'  failure (red label)
+vyt: warning: skipping entry '...'    recoverable problem (yellow label)
+vyt: hint: run 'vyt playlist list'    suggested next step (cyan label)
+.fi
+.RE
+.PP
+Errors name what failed and, when the cause is known, why.  Most errors
+are followed by a
+.B vyt: hint:
+line containing a copy-pasteable command for the obvious next step.
+Diagnostics (errors, warnings, hints, and notes about empty results or
+empty playlists) are written to stderr; successful command output
+(search results, listings, success confirmations, playback status) is
+written to stdout.
+.SS Colors
+Colors are used only when the target stream is an interactive terminal.
+The environment can override this, in order of precedence:
+.TP
+.B NO_COLOR
+A non-empty value disables color entirely (beats everything below).
+.TP
+.B CLICOLOR_FORCE
+A non-empty value other than
+.B 0
+forces color on, even for redirected output.
+.TP
+.B CLICOLOR=0
+Disables color.
+.TP
+.B TERM=dumb
+Disables color.
+.PP
+With color disabled the wording and layout are unchanged; only the
+escape sequences are omitted, so output stays readable in monochrome
+terminals and logs.
+.SS Scriptable output
+When stdout is not a terminal, listing commands fall back to stable
+plain formats so shell scripts keep working unchanged:
+.TP
+.B "vyt \-s QUERY"
+One
+.RB ` "title | URL" '
+line per result, no header, no footer.
+.TP
+.B "vyt playlist list"
+One playlist name per line, nothing else.
+.TP
+.B "vyt playlist song list"
+The storage format: one
+.RB ` "song_name = url" '
+line per song; legacy entries print as just the URL.
+.PP
+Whether stdout is a terminal affects only the format of these listings,
+never their content, stream choice, or exit status.  Long titles and
+song names are truncated to the terminal width at a UTF-8 character
+boundary; URLs are never truncated, so they remain copy-pasteable.
 .SH PLAYLISTS
 .B vyt
 stores playlists as plain text files under the playlists directory (see
@@ -85,8 +160,12 @@ Create a new, empty playlist called
 Fails if a playlist with that name already exists.
 .TP
 .B "vyt playlist list"
-Print the name of every playlist, sorted alphabetically.
-An empty playlists directory is not an error.
+Print every playlist, sorted alphabetically.  On a terminal each name
+is followed by its song count (or
+.RB ` empty ');
+when stdout is not a terminal only the names are printed.  An empty
+playlists directory is not an error: vyt prints a note and a hint to
+stderr and exits 0.
 .TP
 .BI "vyt playlist remove " name
 Delete the playlist called
@@ -126,12 +205,16 @@ match is removed.
 .TP
 .BI "vyt playlist song list " playlist
 Print every song in playlist
-.IR playlist ,
-one per line, in the form
-.RB ` "song_name = url" .
+.IR playlist .
+On a terminal the songs are numbered, with each song name on its own
+line and its URL dimmed on the line beneath, so long names and long
+URLs stay readable; the header names the playlist and the song count.
 Songs without a name (legacy entries from older versions of
 .BR vyt )
-are printed as just the URL.
+are printed as just the URL.  When stdout is not a terminal the storage
+format is printed instead (see
+.B OUTPUT
+above).
 .TP
 .BI "vyt playlist play " name
 Play playlist
@@ -143,48 +226,12 @@ in random order, using
 When more than one song is present,
 .B vyt
 never picks the same song twice in a row.
-The song name is shown in the "now playing" line if present, otherwise
-the URL is shown.
+The "now playing" line shows the song's position in the playlist as
+.RB ` "[ position/count] " '
+followed by the song name if present, otherwise the URL.
 Playback continues indefinitely until interrupted; see
 .B SIGNALS
 below.
-.SH FILES
-.TP
-.I ~/.config/vyt/playlists/
-Default location for playlist files. Created on first use with
-.B "mkdir \-p"
-semantics.
-.TP
-.I $XDG_CONFIG_HOME/vyt/playlists/
-Used instead of the default if
-.B XDG_CONFIG_HOME
-is set and absolute.
-.TP
-Playlist names may be at most 64 bytes, must not contain
-.BR / ,
-control characters, leading or trailing whitespace, or begin with a
-dot (this covers
-.B .
-and
-.BR .. ,
-and prevents creating playlists that
-.B "vyt playlist list"
-would never show).
-A playlist name becomes a filename, so these rules keep it inside the
-playlists directory.
-.TP
-Song names may be at most 256 bytes, must not be empty (or only
-whitespace), and must not contain control characters (newline,
-carriage return, etc.). Spaces and the
-.B =
-character are allowed; the storage line
-.RB ` "song_name = url" '
-is split at the
-.I last
-.RB ` " = " '
-separator, so a name like
-.RB ` "Song = Cool" '
-round-trips correctly because the URL portion is whitespace-free.
 .SS Song names
 A song name must be between 1 and 256 bytes, must contain at least one
 non-whitespace character, and must not contain control characters. A
@@ -238,12 +285,40 @@ exits 0 on success and 1 on any error (missing playlist, duplicate URL,
 invalid playlist name, invalid song name, malformed URL, filesystem
 failure, etc.).
 .PP
+A search that returns no results exits 0 with a note on stderr.
+.PP
 Stopping playback with Ctrl+C is considered normal termination, not an
 error: the exit status is 0.
 .PP
 Non-zero if
 .B vyt
 itself failed to parse arguments or launch the process.
+.SH ENVIRONMENT
+.TP
+.B XDG_CONFIG_HOME
+If set and absolute, playlists live under
+.IR $XDG_CONFIG_HOME/vyt/playlists/ .
+.TP
+.B NO_COLOR
+Non-empty: never emit ANSI color escapes.  See
+.B OUTPUT
+above for the full precedence rules.
+.TP
+.B CLICOLOR_FORCE
+Non-empty and not "0": emit ANSI escapes even when the output is not a
+terminal.
+.TP
+.B CLICOLOR
+Setting it to "0" disables color.
+.TP
+.B TERM
+A value of
+.B dumb
+disables color.
+.TP
+.B COLUMNS
+Consulted for the terminal width when the width cannot be measured
+directly.
 .SH REQUIREMENTS
 .B yt-dlp
 and
