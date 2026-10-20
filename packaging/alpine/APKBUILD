@@ -1,0 +1,23 @@
+# Contributor: E-Vex <contact@e-vex.dev>
+# Maintainer: E-Vex <contact@e-vex.dev>
+pkgname=vyt
+pkgver=2.0.0
+pkgrel=0
+pkgdesc="tiny C wrapper around yt-dlp and mpv"
+url="https://github.com/E-Vex/vyt"
+arch="x86_64"
+license="MIT"
+depends="yt-dlp mpv"
+makedepends="gcc make"
+source="https://github.com/E-Vex/vyt/archive/refs/tags/v${pkgver}.tar.gz"
+builddir="$srcdir/vyt-${pkgver}"
+
+build() {
+    make
+}
+
+package() {
+    mkdir -p "$pkgdir/usr/bin" "$pkgdir/usr/share/man/man1"
+    install -m 0755 vyt "$pkgdir/usr/bin/vyt"
+    install -m 0644 man/vyt.1 "$pkgdir/usr/share/man/man1/vyt.1"
+}

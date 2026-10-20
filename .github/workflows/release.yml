@@ -8,7 +8,10 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  # ------------------------------------------------------------------------
+  # build + test (ubuntu)
+  # ------------------------------------------------------------------------
+  build-test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -20,24 +23,175 @@ jobs:
       - name: Run tests
         run: make test
 
-      - name: Package
+  # ------------------------------------------------------------------------
+  # native packages: .deb + .rpm (Debian/Ubuntu, RHEL/Fedora/openSUSE)
+  # ------------------------------------------------------------------------
+  package:
+    needs: build-test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        format: [deb, rpm]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install fpm
+        run: |
+          apt-get update && apt-get install -y --no-install-recommends ruby-dev
+          gem install fpm --no-document
+
+      - name: Build vyt
+        run: make
+
+      - name: Stage files for packaging
+        run: |
+          rm -rf staging
+          mkdir -p staging/usr/local/bin staging/usr/share/man/man1
+          install -m 0755 vyt staging/usr/local/bin/vyt
+          install -m 0644 man/vyt.1 staging/usr/share/man/man1/vyt.1
+
+      - name: Build package (${{ matrix.format }})
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
+          fpm -s dir -t "${{ matrix.format }}" \
+            -n vyt \
+            -v "$VERSION" \
+            -a x86_64 \
+            --description "tiny C wrapper around yt-dlp and mpv" \
+            --license MIT \
+            --depends yt-dlp \
+            --depends mpv \
+            -C staging \
+            usr/local/bin/vyt \
+            usr/share/man/man1/vyt.1
+          ls "${{ matrix.format }}"* 2>/dev/null || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.format }}-package
+          path: "*.deb,*.rpm"
+
+  # ------------------------------------------------------------------------
+  # native package: .apk (Alpine, musl static binary)
+  # ------------------------------------------------------------------------
+  package-alpine:
+    needs: build-test
+    runs-on: ubuntu-latest
+    container: alpine:latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: apk add --no-cache build-base
+
+      - name: Build vyt (static musl binary)
+        run: make CFLAGS='-std=c17 -static -Os'
+
+      - name: Build .apk
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          rm -rf apkroot
+          mkdir -p apkroot/usr/bin
+          install -m 0755 vyt apkroot/usr/bin/vyt
+          printf 'pkgname = vyt\npkgver = %s-r0\narch = x86_64\nurl = https://github.com/E-Vex/vyt\ndescription = tiny C wrapper around yt-dlp and mpv\norigin = vyt\n' \
+            "$VERSION" > apkroot/.PKGINFO
+          tar czf "vyt-${VERSION}-x86_64.apk" -C apkroot .PKGINFO usr/bin/vyt
+          ls *.apk
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: alpine-package
+          path: "*.apk"
+
+  # ------------------------------------------------------------------------
+  # native package: .pkg.tar.zst (Arch Linux)
+  # ------------------------------------------------------------------------
+  package-arch:
+    needs: build-test
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: pacman -Sy --needed --noconfirm base-devel zstd
+
+      - name: Build vyt
+        run: make
+
+      - name: Build .pkg.tar.zst
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          rm -rf archroot
+          mkdir -p archroot/usr/bin archroot/usr/share/man/man1
+          install -m 0755 vyt archroot/usr/bin/vyt
+          install -m 0644 man/vyt.1 archroot/usr/share/man/man1/vyt.1
+          BDATE=$(date -u +%s)
+          SIZE=$(du -sb archroot | awk '{print $1}')
+          printf 'pkgname = vyt\npkgver = %s-1\npkgdesc = tiny C wrapper around yt-dlp and mpv\nurl = https://github.com/E-Vex/vyt\nlicense = MIT\narch = x86_64\nbuilddate = %s\npackager = E-Vex <contact@e-vex.dev>\nsize = %s\n' \
+            "$VERSION" "$BDATE" "$SIZE" > archroot/.PKGINFO
+          tar --zst -cf "vyt-${VERSION}-x86_64.pkg.tar.zst" \
+            -C archroot .PKGINFO usr/bin/vyt usr/share/man/man1/vyt.1
+          ls *.pkg.tar.zst
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: arch-package
+          path: "*.pkg.tar.zst"
+
+  # ------------------------------------------------------------------------
+  # GitHub release: universal tarball + all native packages
+  # ------------------------------------------------------------------------
+  release:
+    needs: [build-test, package, package-alpine, package-arch]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build vyt (universal x86_64 Linux tarball)
+        run: make
+
+      - name: Download all native packages
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Build universal tarball and checksums
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          rm -rf "vyt-${VERSION}"
           mkdir "vyt-${VERSION}"
           cp vyt README.md LICENSE "vyt-${VERSION}/"
           tar czf "vyt-${VERSION}-x86_64-linux.tar.gz" "vyt-${VERSION}"
           sha256sum "vyt-${VERSION}-x86_64-linux.tar.gz" > sha256sums.txt
+          ls -1
 
-      - name: Attach assets to the release
+      - name: Create or update GitHub release
         run: |
-          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" \
-              vyt-*-x86_64-linux.tar.gz sha256sums.txt --clobber
+          VERSION="${GITHUB_REF_NAME#v}"
+          TAG="v${VERSION}"
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" \
+              "vyt-${VERSION}-x86_64-linux.tar.gz" \
+              sha256sums.txt \
+              artifacts/*.deb artifacts/*.rpm artifacts/*.apk artifacts/*.pkg.tar.zst \
+              --clobber
           else
-            gh release create "$GITHUB_REF_NAME" \
-              --title "vyt ${GITHUB_REF_NAME#v}" \
+            gh release create "$TAG" \
+              --title "vyt v${VERSION}" \
               --generate-notes \
-              vyt-*-x86_64-linux.tar.gz sha256sums.txt
+              "vyt-${VERSION}-x86_64-linux.tar.gz" \
+              sha256sums.txt \
+              artifacts/*.deb artifacts/*.rpm artifacts/*.apk artifacts/*.pkg.tar.zst
           fi
         env:
           GH_TOKEN: ${{ github.token }}

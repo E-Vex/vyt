@@ -1,0 +1,10 @@
+Package: vyt
+Version: 2.0.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: E-Vex <contact@e-vex.dev>
+Depends: yt-dlp, mpv
+Description: tiny C wrapper around yt-dlp and mpv
+ vyt is a tiny C wrapper around yt-dlp and mpv that makes searching,
+ playing and organising YouTube media fast & simple from the terminal.
