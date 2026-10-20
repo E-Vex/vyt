@@ -12,6 +12,7 @@ typedef enum
     MODE_MUSIC,   /* -m URL  */
     MODE_VIDEO,   /* -v URL  */
     MODE_SEARCH,  /* -s QUERY */
+    MODE_DOWNLOAD,/* -d URL  */
     MODE_HELP,    /* -h */
     MODE_VERSION, /* -V */
     MODE_PLAYLIST /* `vyt playlist ...` subcommand tree */
@@ -20,7 +21,7 @@ typedef enum
 typedef struct
 {
     cli_mode_t mode;
-    char *argument; /* URL for -m/-v, search query for -s, NULL for -h/-V */
+    char *argument; /* URL for -m/-v/-d, search query for -s, NULL for -h/-V */
 } options_t;
 
 void cli_print_usage(FILE *stream);

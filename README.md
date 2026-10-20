@@ -33,6 +33,7 @@ Usage:
   vyt -m URL
   vyt -v URL
   vyt -s QUERY
+  vyt -d URL
   vyt playlist <command> ...
   vyt -V
   vyt -h
@@ -41,6 +42,7 @@ Options:
   -m URL    Play YouTube URL as music (audio only, via mpv --no-video)
   -v URL    Play YouTube URL as video (via mpv)
   -s QUERY  Search YouTube for QUERY (via yt-dlp, top 10 results)
+  -d URL    Download YouTube media via yt-dlp to the current directory
   -V        Print the version
   -h        Show this message :D
 
@@ -67,6 +69,9 @@ vyt -m "https://youtu.be/OgJ5bEg31Aw"
 
 # Search (prints the top 10 results as a numbered list)
 vyt -s "Purgatori"
+
+# Download media to the current directory
+vyt -d "https://youtu.be/pahb4TugTkQ"
 ```
 
 ## Terminal output

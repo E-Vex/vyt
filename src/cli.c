@@ -15,6 +15,7 @@ void cli_print_usage(FILE *stream)
             "  vyt -m URL\n"
             "  vyt -v URL\n"
             "  vyt -s QUERY\n"
+            "  vyt -d URL\n"
             "  vyt playlist <command> ...\n"
             "  vyt -V\n"
             "  vyt -h\n");
@@ -31,6 +32,7 @@ void cli_print_help(void)
         "  vyt -m URL\n"
         "  vyt -v URL\n"
         "  vyt -s QUERY\n"
+        "  vyt -d URL\n"
         "  vyt playlist <command> ...\n"
         "  vyt -V\n"
         "  vyt -h\n",
@@ -41,6 +43,7 @@ void cli_print_help(void)
         "  -m URL    Play YouTube URL as music (audio only, via mpv --no-video)\n"
         "  -v URL    Play YouTube URL as video (via mpv)\n"
         "  -s QUERY  Search YouTube for QUERY (via yt-dlp, top 10 results)\n"
+        "  -d URL    Download YouTube media via yt-dlp to the current directory\n"
         "  -V        Print the version\n"
         "  -h        Show this message :D\n",
         out);
@@ -96,13 +99,14 @@ int cli_parse(int argc, char **argv, options_t *opts)
     opterr = 0;
 
     int opt;
-    while ((opt = getopt(argc, argv, ":m:v:s:hV")) != -1)
+    while ((opt = getopt(argc, argv, ":m:v:s:d:hV")) != -1)
     {
         switch (opt)
         {
         case 'm':
         case 'v':
         case 's':
+        case 'd':
             if (mode == MODE_HELP || mode == MODE_VERSION)
             {
                 out_error(stderr, "-h/-V cannot be combined with other options");
@@ -110,7 +114,7 @@ int cli_parse(int argc, char **argv, options_t *opts)
             }
             if (mode != MODE_NONE)
             {
-                out_error(stderr, "only one of -m, -v or -s may be specified");
+                out_error(stderr, "only one of -m, -v, -s or -d may be specified");
                 return -1;
             }
             if (optarg[0] == '\0')
@@ -127,9 +131,13 @@ int cli_parse(int argc, char **argv, options_t *opts)
             {
                 mode = MODE_VIDEO;
             }
-            else
+            else if (opt == 's')
             {
                 mode = MODE_SEARCH;
+            }
+            else
+            {
+                mode = MODE_DOWNLOAD;
             }
 
             argument = optarg;

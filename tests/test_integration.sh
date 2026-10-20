@@ -304,6 +304,40 @@ expect_err "skipped 1 malformed" "malformed lines are reported" "$BIN" -s q
 expect_out "Good | https://youtu.be/good" "good lines survive malformed ones" "$BIN" -s q
 
 # ---------------------------------------------------------------------------
+# download via stub yt-dlp
+# ---------------------------------------------------------------------------
+
+# Stub yt-dlp for download: record the invocation, create an output file,
+# and exit 0.  Invoked as: yt-dlp -- <URL>
+cat > "$FAKE/yt-dlp" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$@" > yt-dlp-download-args
+touch downloaded-by-vyt
+exit 0
+EOF
+chmod +x "$FAKE/yt-dlp"
+
+expect_status 0 "download succeeds" "$BIN" -d "https://youtu.be/abc"
+if [ -f downloaded-by-vyt ]; then ok; else bad "download: yt-dlp did not create output file"; fi
+if grep -q "https://youtu.be/abc" yt-dlp-download-args; then ok; else bad "download: URL passed to yt-dlp"; fi
+if grep -q -- "--" yt-dlp-download-args; then ok; else bad "download: -- separator passed to yt-dlp"; fi
+rm -f downloaded-by-vyt yt-dlp-download-args
+
+# Download failure: stub exits non-zero after printing a diagnostic.
+cat > "$FAKE/yt-dlp" <<'EOF'
+#!/bin/sh
+echo "yt-dlp simulated download failure" >&2
+exit 5
+EOF
+chmod +x "$FAKE/yt-dlp"
+expect_status 5 "download failure passes status through" "$BIN" -d "https://youtu.be/abc"
+expect_err "yt-dlp simulated download failure" "download failure surfaces yt-dlp's diagnostic" "$BIN" -d "https://youtu.be/abc"
+
+# Missing yt-dlp: conventional 127 with the not-found diagnostic.
+expect_status 127 "missing yt-dlp download exits 127" env PATH="$TMP/emptybin" "$BIN" -d q
+expect_err "not found" "missing yt-dlp download explains itself" env PATH="$TMP/emptybin" "$BIN" -d q
+
+# ---------------------------------------------------------------------------
 # color behavior
 # ---------------------------------------------------------------------------
 

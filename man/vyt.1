@@ -15,6 +15,10 @@ vyt \- a tiny C wrapper around yt-dlp and mpv
 .I QUERY
 .br
 .B vyt
+.B \-d
+.I URL
+.br
+.B vyt
 .B playlist
 .I COMMAND
 .RI [ ARGS ...]
@@ -70,6 +74,23 @@ for scripting; see
 .B OUTPUT
 below.  A search that returns no results is not an error: vyt prints a
 note and exits 0.
+.TP
+.BI \-d " URL"
+Download
+.I URL
+via
+.BR yt-dlp ,
+saving it to the current directory with yt-dlp's default naming.
+Unlike
+.BR "vyt \-m "
+and
+.BR "vyt \-v" ,
+which hand the URL to
+.BR mpv
+for playback,
+.B \-d
+writes the media to disk.  yt-dlp's own progress bar and diagnostics are
+shown on the terminal, and vyt exits with yt-dlp's status.
 .TP
 .B \-V
 Print the version and exit.

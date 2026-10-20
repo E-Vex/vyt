@@ -65,6 +65,18 @@ static void test_search_mode(void)
           "search: expected argument to be the query");
 }
 
+static void test_download_mode(void)
+{
+    char *argv[] = {"vyt", "-d", "https://youtu.be/abc", NULL};
+    options_t opts;
+    int rc = run_parse(argv, &opts);
+
+    CHECK(rc == 0, "download: expected success");
+    CHECK(opts.mode == MODE_DOWNLOAD, "download: expected MODE_DOWNLOAD");
+    CHECK(opts.argument != NULL && strcmp(opts.argument, "https://youtu.be/abc") == 0,
+          "download: expected argument to be the URL");
+}
+
 static void test_help_mode(void)
 {
     char *argv[] = {"vyt", "-h", NULL};
@@ -166,11 +178,21 @@ static void test_empty_search_argument_is_error(void)
     CHECK(rc == -1, "empty -s argument: expected failure");
 }
 
+static void test_empty_download_argument_is_error(void)
+{
+    char *argv[] = {"vyt", "-d", "", NULL};
+    options_t opts;
+    int rc = run_parse(argv, &opts);
+
+    CHECK(rc == -1, "empty -d argument: expected failure");
+}
+
 int main(void)
 {
     test_music_mode();
     test_video_mode();
     test_search_mode();
+    test_download_mode();
     test_help_mode();
     test_version_mode();
     test_no_mode_is_error();
@@ -182,6 +204,7 @@ int main(void)
     test_empty_music_argument_is_error();
     test_empty_video_argument_is_error();
     test_empty_search_argument_is_error();
+    test_empty_download_argument_is_error();
 
     if (failures == 0)
     {

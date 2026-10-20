@@ -8,6 +8,7 @@
 /* LOCAL MODULES                                                             */
 /* ========================================================================= */
 #include "cli.h"
+#include "download.h"
 #include "output.h"
 #include "player.h"
 #include "playlist_cmd.h"
@@ -53,6 +54,10 @@ int main(int argc, char **argv)
 
     case MODE_SEARCH:
         status = search_youtube(opts.argument);
+        break;
+
+    case MODE_DOWNLOAD:
+        status = download_youtube(opts.argument);
         break;
 
     case MODE_HELP:
