@@ -32,7 +32,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        format: [deb, rpm]
+        # Each format gets its own upload pattern: upload-artifact treats
+        # "*.deb,*.rpm" as a single comma-joined glob that matches nothing.
+        include:
+          - format: deb
+            pattern: '*.deb'
+          - format: rpm
+            pattern: '*.rpm'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -76,7 +82,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.format }}-package
-          path: "*.deb,*.rpm"
+          path: ${{ matrix.pattern }}
+          if-no-files-found: error
 
   # ------------------------------------------------------------------------
   # native package: .apk (Alpine, musl static binary)
@@ -111,6 +118,7 @@ jobs:
         with:
           name: alpine-package
           path: "*.apk"
+          if-no-files-found: error
 
   # ------------------------------------------------------------------------
   # native package: .pkg.tar.zst (Arch Linux)
@@ -149,6 +157,7 @@ jobs:
         with:
           name: arch-package
           path: "*.pkg.tar.zst"
+          if-no-files-found: error
 
   # ------------------------------------------------------------------------
   # GitHub release: universal tarball + all native packages
@@ -179,23 +188,47 @@ jobs:
           sha256sum "vyt-${VERSION}-x86_64-linux.tar.gz" > sha256sums.txt
           ls -1
 
+      - name: Verify all native packages were downloaded
+        run: |
+          # Fail loudly here instead of letting an unmatched glob abort the
+          # release step halfway through.
+          missing=0
+          for pattern in '*.deb' '*.rpm' '*.apk' '*.pkg.tar.zst'; do
+            found=$(find artifacts -maxdepth 1 -name "$pattern" | head -1)
+            if [ -z "$found" ]; then
+              echo "missing artifact matching $pattern" >&2
+              missing=1
+            else
+              echo "found $found"
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "not all native packages were produced" >&2
+            ls -la artifacts >&2
+            exit 1
+          fi
+
       - name: Create or update GitHub release
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           TAG="v${VERSION}"
+          shopt -s nullglob
+          assets=(
+            "vyt-${VERSION}-x86_64-linux.tar.gz"
+            sha256sums.txt
+            artifacts/*.deb
+            artifacts/*.rpm
+            artifacts/*.apk
+            artifacts/*.pkg.tar.zst
+          )
+          echo "attaching ${#assets[@]} assets"
           if gh release view "$TAG" > /dev/null 2>&1; then
-            gh release upload "$TAG" \
-              "vyt-${VERSION}-x86_64-linux.tar.gz" \
-              sha256sums.txt \
-              artifacts/*.deb artifacts/*.rpm artifacts/*.apk artifacts/*.pkg.tar.zst \
-              --clobber
+            gh release upload "$TAG" "${assets[@]}" --clobber
           else
             gh release create "$TAG" \
               --title "vyt v${VERSION}" \
               --generate-notes \
-              "vyt-${VERSION}-x86_64-linux.tar.gz" \
-              sha256sums.txt \
-              artifacts/*.deb artifacts/*.rpm artifacts/*.apk artifacts/*.pkg.tar.zst
+              "${assets[@]}"
           fi
         env:
           GH_TOKEN: ${{ github.token }}
