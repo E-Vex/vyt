@@ -18,13 +18,6 @@
 /* COLOR STATE                                                               */
 /* ========================================================================= */
 
-#define RESET "\033[0m"
-
-#define LABEL_ERROR "\033[1;31m"  /* bold red   */
-#define LABEL_WARN "\033[1;33m"   /* bold yellow */
-#define LABEL_HINT "\033[36m"     /* cyan       */
-#define MARK_OK "\033[32m"        /* green      */
-
 /* Environment facts, scanned once by out_init(). */
 static int g_scanned = 0;
 static int g_no_color = 0;    /* NO_COLOR set non-empty */
@@ -155,24 +148,44 @@ int out_term_width(FILE *stream)
 /* ESCAPE HELPERS                                                            */
 /* ========================================================================= */
 
-const char *out_sgr(FILE *stream, const char *code)
+/*
+ * The SGR code behind every named style.  A style always renders the same
+ * way, which is what makes out_style() safe to call several times for the
+ * same style inside one printf().
+ */
+static const char *const style_codes[] = {
+    [OUT_BOLD] = "1",
+    [OUT_DIM] = "2",
+    [OUT_RESET] = "0",
+    [OUT_ERROR] = "1;31",
+    [OUT_WARNING] = "1;33",
+    [OUT_HINT] = "36",
+    [OUT_OK] = "32",
+};
+
+#define STYLE_COUNT ((int)(sizeof style_codes / sizeof style_codes[0]))
+
+/* One buffer per style: two different styles never share storage, and a
+ * style's own buffer always holds the same text. */
+static char style_bufs[STYLE_COUNT][16];
+
+const char *out_style(FILE *stream, out_style_t style)
 {
-    if (!out_color_enabled(stream))
+    int index = (int)style;
+    if (index < 0 || index >= STYLE_COUNT)
     {
         return "";
     }
 
-    /* Ring of buffers so a single printf() can mix several results. */
-    static char slots[16][24];
-    static unsigned next = 0;
-    char *s = slots[next++ % 16];
-    snprintf(s, sizeof slots[0], "\033[%sm", code);
-    return s;
-}
+    char *buf = style_bufs[index];
+    if (!out_color_enabled(stream))
+    {
+        buf[0] = '\0';
+        return buf;
+    }
 
-const char *out_reset(FILE *stream)
-{
-    return out_sgr(stream, "0");
+    snprintf(buf, sizeof style_bufs[0], "\033[%sm", style_codes[index]);
+    return buf;
 }
 
 /* ========================================================================= */
@@ -180,7 +193,7 @@ const char *out_reset(FILE *stream)
 /* ========================================================================= */
 
 /* Shared body: "vyt: " + optional colored "label: " + formatted message. */
-static void vmsg(FILE *stream, const char *label, const char *label_sgr,
+static void vmsg(FILE *stream, const char *label, out_style_t style,
                  const char *fmt, va_list ap)
 {
     scan_env();
@@ -188,14 +201,9 @@ static void vmsg(FILE *stream, const char *label, const char *label_sgr,
     fputs("vyt: ", stream);
     if (label != NULL)
     {
-        if (out_color_enabled(stream))
-        {
-            fprintf(stream, "%s%s%s", label_sgr, label, RESET);
-        }
-        else
-        {
-            fputs(label, stream);
-        }
+        fputs(out_style(stream, style), stream);
+        fputs(label, stream);
+        fputs(out_style(stream, OUT_RESET), stream);
         fputs(": ", stream);
     }
     vfprintf(stream, fmt, ap);
@@ -209,14 +217,10 @@ void out_ok(FILE *stream, const char *fmt, ...)
 
     scan_env();
     fputs("vyt: ", stream);
-    if (out_color_enabled(stream))
-    {
-        fputs(MARK_OK "\u2713" RESET " ", stream);
-    }
-    else
-    {
-        fputs("\u2713 ", stream);
-    }
+    fputs(out_style(stream, OUT_OK), stream);
+    fputs("\u2713", stream); /* the check mark */
+    fputs(out_style(stream, OUT_RESET), stream);
+    fputc(' ', stream);
     vfprintf(stream, fmt, ap);
     fputc('\n', stream);
 
@@ -227,7 +231,7 @@ void out_status(FILE *stream, const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    vmsg(stream, NULL, NULL, fmt, ap);
+    vmsg(stream, NULL, OUT_RESET, fmt, ap);
     va_end(ap);
 }
 
@@ -235,7 +239,7 @@ void out_error(FILE *stream, const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    vmsg(stream, "error", LABEL_ERROR, fmt, ap);
+    vmsg(stream, "error", OUT_ERROR, fmt, ap);
     va_end(ap);
 }
 
@@ -243,7 +247,7 @@ void out_warn(FILE *stream, const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    vmsg(stream, "warning", LABEL_WARN, fmt, ap);
+    vmsg(stream, "warning", OUT_WARNING, fmt, ap);
     va_end(ap);
 }
 
@@ -251,7 +255,7 @@ void out_hint(FILE *stream, const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    vmsg(stream, "hint", LABEL_HINT, fmt, ap);
+    vmsg(stream, "hint", OUT_HINT, fmt, ap);
     va_end(ap);
 }
 
@@ -268,7 +272,7 @@ char *out_truncate_utf8(char *buf, size_t bufsz, const char *s,
     {
         if (len < bufsz)
         {
-            memcpy(buf, s, len + 1);
+            memmove(buf, s, len + 1);
             return buf;
         }
         /* Not even the untruncated string fits: fall through to a hard
@@ -288,7 +292,68 @@ char *out_truncate_utf8(char *buf, size_t bufsz, const char *s,
         keep--;
     }
 
-    memcpy(buf, s, keep);
+    /* memmove, not memcpy: out_safe_line() truncates a buffer into itself. */
+    memmove(buf, s, keep);
     memcpy(buf + keep, "\u2026", 4); /* "…" + NUL */
     return buf;
+}
+
+char *out_safe_line(char *buf, size_t bufsz, const char *s)
+{
+    if (bufsz == 0)
+    {
+        return buf;
+    }
+
+    size_t j = 0;
+    for (size_t i = 0; s[i] != '\0' && j + 1 < bufsz; i++)
+    {
+        unsigned char c = (unsigned char)s[i];
+        buf[j++] = (c < 0x20 || c == 0x7f) ? ' ' : (char)c;
+    }
+    buf[j] = '\0';
+
+    return out_truncate_utf8(buf, bufsz, buf, bufsz - 1);
+}
+
+/* ========================================================================= */
+/* LAYOUT HELPERS                                                            */
+/* ========================================================================= */
+
+size_t out_num_cols(size_t n)
+{
+    size_t cols = 1;
+    while (n >= 10)
+    {
+        n /= 10;
+        cols++;
+    }
+    return cols;
+}
+
+size_t out_fit_cols(int width, size_t indent, size_t hard_max)
+{
+    if (width <= 0)
+    {
+        return 0;
+    }
+
+    /* One column of margin keeps the text off the right edge. */
+    size_t used = indent + 1;
+    if ((size_t)width <= used)
+    {
+        return 0;
+    }
+
+    size_t available = (size_t)width - used;
+    return (available < hard_max) ? available : hard_max;
+}
+
+void out_print_dim(FILE *stream, size_t indent, const char *text)
+{
+    fputs(out_style(stream, OUT_DIM), stream);
+    fprintf(stream, "%*s", (int)indent, "");
+    fputs(text, stream);
+    fputs(out_style(stream, OUT_RESET), stream);
+    fputc('\n', stream);
 }

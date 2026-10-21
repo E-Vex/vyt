@@ -175,26 +175,104 @@ static void test_message_shapes_color_on(void)
     out_set_color_mode(OUT_COLOR_AUTO);
 }
 
-static void test_sgr_composition(void)
+static void test_styles(void)
 {
     out_set_color_mode(OUT_COLOR_OFF);
     char *s = capture(sink_status, "x");
-    CHECK(strchr(s, '\033') == NULL, "sgr: off mode emits nothing");
+    CHECK(strchr(s, '\033') == NULL, "style: off mode emits nothing");
     free(s);
 
     out_set_color_mode(OUT_COLOR_ON);
-    CHECK_STREQ(out_sgr(stdout, "1"), "\033[1m", "sgr: bold code");
-    CHECK_STREQ(out_reset(stdout), "\033[0m", "sgr: reset code");
+    CHECK_STREQ(out_style(stdout, OUT_BOLD), "\033[1m", "style: bold code");
+    CHECK_STREQ(out_style(stdout, OUT_DIM), "\033[2m", "style: dim code");
+    CHECK_STREQ(out_style(stdout, OUT_RESET), "\033[0m", "style: reset code");
+    CHECK_STREQ(out_style(stdout, OUT_ERROR), "\033[1;31m", "style: error label");
+    CHECK_STREQ(out_style(stdout, OUT_WARNING), "\033[1;33m",
+                "style: warning label");
+    CHECK_STREQ(out_style(stdout, OUT_HINT), "\033[36m", "style: hint label");
+    CHECK_STREQ(out_style(stdout, OUT_OK), "\033[32m", "style: ok mark");
 
-    /* Several distinct results must coexist inside one printf. */
-    const char *a = out_sgr(stdout, "2");
-    const char *b = out_sgr(stdout, "1;36");
-    const char *c = out_reset(stdout);
-    CHECK(a != b && b != c && strcmp(a, b) != 0,
-          "sgr: consecutive calls return distinct buffers");
-    CHECK_STREQ(a, "\033[2m", "sgr: first ring slot intact");
+    /* Two different styles never share storage. */
+    const char *a = out_style(stdout, OUT_BOLD);
+    const char *b = out_style(stdout, OUT_DIM);
+    CHECK(a != b, "style: different styles use different buffers");
+
+    /* The same style may be used twice in one printf(): its text never
+     * changes, so the two results are interchangeable. */
+    const char *c = out_style(stdout, OUT_BOLD);
+    CHECK_STREQ(c, a, "style: the same style always renders the same");
 
     out_set_color_mode(OUT_COLOR_AUTO);
+}
+
+/* ------------------------------------------------------------------------ */
+/* layout helpers                                                            */
+/* ------------------------------------------------------------------------ */
+
+static void test_num_cols(void)
+{
+    CHECK(out_num_cols(1) == 1, "num_cols: one digit");
+    CHECK(out_num_cols(9) == 1, "num_cols: nine is one column");
+    CHECK(out_num_cols(10) == 2, "num_cols: ten needs two");
+    CHECK(out_num_cols(99) == 2, "num_cols: ninety-nine needs two");
+    CHECK(out_num_cols(100) == 3, "num_cols: a hundred needs three");
+    CHECK(out_num_cols(1000) == 4, "num_cols: a thousand needs four");
+}
+
+static void test_fit_cols(void)
+{
+    /* The hard cap wins on a wide terminal. */
+    CHECK(out_fit_cols(80, 0, 40) == 40, "fit: the hard cap wins");
+    CHECK(out_fit_cols(80, 4, 40) == 40, "fit: the hard cap wins with an indent");
+
+    /* A narrow terminal leaves less room, never more. */
+    CHECK(out_fit_cols(20, 4, 40) == 15, "fit: a narrow terminal has less room");
+    CHECK(out_fit_cols(12, 4, 40) == 7, "fit: the room shrinks with the indent");
+
+    /* No room at all. */
+    CHECK(out_fit_cols(5, 4, 40) == 0, "fit: a tiny terminal leaves no room");
+    CHECK(out_fit_cols(0, 0, 40) == 0, "fit: no width means no room");
+}
+
+static void sink_dim(FILE *out, void *user)
+{
+    out_print_dim(out, 4, (const char *)user);
+}
+
+static void test_print_dim(void)
+{
+    out_set_color_mode(OUT_COLOR_OFF);
+    char *s = capture(sink_dim, "https://youtu.be/abc");
+    CHECK_STREQ(s, "    https://youtu.be/abc\n", "print_dim: indent and text");
+    free(s);
+
+    out_set_color_mode(OUT_COLOR_ON);
+    s = capture(sink_dim, "x");
+    CHECK_STREQ(s, "\033[2m    x\033[0m\n", "print_dim: dimmed when color is on");
+    free(s);
+
+    out_set_color_mode(OUT_COLOR_AUTO);
+}
+
+static void test_safe_line(void)
+{
+    char buf[64];
+
+    out_safe_line(buf, sizeof buf, "plain text");
+    CHECK_STREQ(buf, "plain text", "safe_line: plain text unchanged");
+
+    /* Control characters become spaces: a query can never rearrange the
+     * line it is printed on. */
+    out_safe_line(buf, sizeof buf, "a\x1b[31mb");
+    CHECK_STREQ(buf, "a [31mb", "safe_line: escape sequence neutralized");
+
+    out_safe_line(buf, sizeof buf, "tab\there");
+    CHECK_STREQ(buf, "tab here", "safe_line: tab neutralized");
+
+    /* The result always fits the buffer. */
+    char small[8];
+    out_safe_line(small, sizeof small, "0123456789");
+    CHECK(strlen(small) < sizeof small, "safe_line: respects the buffer size");
 }
 
 /* ------------------------------------------------------------------------ */
@@ -285,7 +363,11 @@ int main(void)
     test_truncate();
     test_message_shapes_color_off();
     test_message_shapes_color_on();
-    test_sgr_composition();
+    test_styles();
+    test_num_cols();
+    test_fit_cols();
+    test_print_dim();
+    test_safe_line();
     test_precedence();
     test_term_width();
 

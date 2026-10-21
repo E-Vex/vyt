@@ -4,6 +4,9 @@
 #include <stddef.h>
 #include <stdio.h>
 
+/* yt-dlp prints "NA" for fields it could not extract from a flat entry. */
+#define SEARCH_NA "NA"
+
 /*
  * One parsed result line from yt-dlp.
  *

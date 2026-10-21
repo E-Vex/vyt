@@ -5,3 +5,4 @@ tests/test_playlist
 tests/test_output
 tests/test_proc
 tests/test_search
+tests/test_url

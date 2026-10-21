@@ -22,6 +22,7 @@ int main(int argc, char **argv)
     if (argc == 1)
     {
         cli_print_usage(stderr);
+        out_hint(stderr, "run 'vyt --help' to see everything vyt can do");
         return EXIT_FAILURE;
     }
 
@@ -62,17 +63,21 @@ int main(int argc, char **argv)
 
     case MODE_HELP:
         cli_print_help();
-        return EXIT_SUCCESS;
+        break;
 
     case MODE_VERSION:
         cli_print_version();
-        return EXIT_SUCCESS;
+        break;
 
     case MODE_NONE:
     default:
         cli_print_usage(stderr);
-        return EXIT_FAILURE;
+        status = EXIT_FAILURE;
+        break;
     }
+
+    /* cli_parse() hands us a copy of the argument; it is ours to free. */
+    free(opts.argument);
 
     if (status < 0)
     {

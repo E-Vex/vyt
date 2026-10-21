@@ -42,6 +42,25 @@ typedef enum
     OUT_COLOR_ON = 1     /* always emit escapes */
 } out_color_mode_t;
 
+/*
+ * The named styles vyt uses.
+ *
+ * A style is one piece of formatting: bold, dim, a colored label, ...  The
+ * escape sequence behind a style is fixed, so the same style may appear
+ * several times in one printf() without the results interfering with each
+ * other -- there is no buffer ring to exhaust and no attribute to garble.
+ */
+typedef enum
+{
+    OUT_BOLD,    /* headings, result titles              */
+    OUT_DIM,     /* secondary text: URLs, metadata        */
+    OUT_RESET,   /* back to the terminal's default        */
+    OUT_ERROR,   /* the "error" label                     */
+    OUT_WARNING, /* the "warning" label                   */
+    OUT_HINT,    /* the "hint" label                      */
+    OUT_OK       /* the success check mark                */
+} out_style_t;
+
 /* Scan the environment once.  Idempotent; the helpers call it lazily, so
  * only programs that care about env changes before the first message need
  * to call it explicitly (main.c does, for clarity). */
@@ -62,22 +81,20 @@ int out_stdout_is_tty(void);
 int out_term_width(FILE *stream);
 
 /*
- * Return the SGR escape for `code` (e.g. "1" bold, "2" dim, "31" red,
- * "1;31" bold red), or "" when color is off for `stream`.
+ * The escape sequence for `style` on `stream`, or "" when color is off.
  *
- * Successive calls draw from a small ring of static buffers, so several
- * out_sgr()/out_reset() results may be composed inside a single printf().
- * Up to 16 distinct results per call site are safe; more is a programming
- * error and produces garbled attributes.  Code must be at most 19 chars.
+ * The returned string stays valid until the next out_style() call for the
+ * same style, and its contents never change for a given style, so several
+ * styles can be composed inside a single printf() safely.  The color
+ * decision follows the stream passed in, so keep one stream per printf().
  */
-const char *out_sgr(FILE *stream, const char *code);
-const char *out_reset(FILE *stream);
+const char *out_style(FILE *stream, out_style_t style);
 
 /*
  * Message helpers.  All of them print one line, prefixed with "vyt: ".
  * out_ok adds a green check mark; out_error/out_warn/out_hint add a
- * colored label.  Formatting of `fmt`/`...` is printf-style; callers may
- * embed out_sgr()/out_reset() results for finer-grained emphasis.
+ * colored label.  Formatting of `fmt`/... is printf-style; callers may
+ * embed out_style() results for finer-grained emphasis.
  */
 void out_ok(FILE *stream, const char *fmt, ...);
 void out_status(FILE *stream, const char *fmt, ...);
@@ -94,5 +111,38 @@ void out_hint(FILE *stream, const char *fmt, ...);
  */
 char *out_truncate_utf8(char *buf, size_t bufsz, const char *s,
                         size_t max_cols);
+
+/*
+ * Copy `s` into buf as one safe line: control characters (including
+ * terminal escapes) become spaces, and the result is truncated to fit.
+ *
+ * Use this for text that comes from the user and is echoed back in a
+ * message, such as a search query: it must never be able to rearrange the
+ * line it is printed on.
+ */
+char *out_safe_line(char *buf, size_t bufsz, const char *s);
+
+/* ========================================================================= */
+/* LAYOUT HELPERS                                                             */
+/*                                                                            */
+/* The listing commands (search results, playlist songs) share one shape:    */
+/* a numbered entry, optional metadata, and a dimmed URL underneath.  The   */
+/* helpers below hold the arithmetic that shape needs, so the two listings  */
+/* cannot drift apart.                                                        */
+/* ========================================================================= */
+
+/* Columns the index of a numbered list occupies: 1 for "1.", 2 for "10.",
+ * 3 for "100.", and so on. */
+size_t out_num_cols(size_t n);
+
+/* How many columns of text fit next to `indent` columns of indentation on
+ * a terminal `width` columns wide, never more than `hard_max`.
+ * One column is always left empty as a margin, so text never touches the
+ * right edge.  Returns 0 when the terminal is too narrow for any text. */
+size_t out_fit_cols(int width, size_t indent, size_t hard_max);
+
+/* Print `text` on a line of its own, dimmed and indented by `indent`
+ * columns. */
+void out_print_dim(FILE *stream, size_t indent, const char *text);
 
 #endif /* OUTPUT_H */

@@ -22,46 +22,183 @@
 #include "playlist.h"
 #include "playlist_cmd.h"
 
+#define COUNT(a) (sizeof(a) / sizeof((a)[0]))
+
 /* ========================================================================= */
-/* USAGE TEXT                                                                */
+/* COMMAND TABLES                                                            */
 /* ========================================================================= */
 
-/* Bare syntax, no descriptions: what error paths print. */
-void playlist_cmd_print_usage(FILE *stream)
+/*
+ * One row of a command table.
+ *
+ * The tables below are the single source of truth for the playlist
+ * commands: the dispatcher, the usage listing, the help listing and the
+ * "wrong number of arguments" errors are all derived from them, so a
+ * command is described exactly once and the listings cannot drift apart.
+ */
+typedef struct pl_command
 {
-    fprintf(stream,
-            "Usage:\n"
-            "  vyt playlist add <name>\n"
-            "  vyt playlist list\n"
-            "  vyt playlist remove <name>\n"
-            "  vyt playlist play <name>\n"
-            "  vyt playlist song add <playlist> <song_name> <url>\n"
-            "  vyt playlist song remove <playlist> <url>\n"
-            "  vyt playlist song list <playlist>\n");
+    const char *name;     /* the word typed on the command line */
+    const char *aliases;  /* alternative spellings, space separated */
+    const char *args;     /* how many arguments it takes, in words */
+    const char *syntax;   /* the arguments as they are written out */
+    const char *summary;  /* the one-line description */
+    int min_args;
+    int max_args;         /* -1: any number of arguments */
+
+    /* The handler receives the arguments only: the table has already
+     * checked how many there are. */
+    int (*handler)(char **argv);
+
+    /* Sub-commands, if this word starts a group of its own ("song"). */
+    const struct pl_command *subs;
+    size_t sub_count;
+} pl_command_t;
+
+static int cmd_add(char **argv);
+static int cmd_list(char **argv);
+static int cmd_remove(char **argv);
+static int cmd_play(char **argv);
+static int cmd_help(char **argv);
+static int cmd_song_add(char **argv);
+static int cmd_song_remove(char **argv);
+static int cmd_song_list(char **argv);
+
+/* `vyt playlist song ...` */
+static const pl_command_t song_commands[] = {
+    {"add", NULL, "exactly three arguments", "<playlist> <song_name> <url>",
+     "Add a named song to a playlist", 3, 3, cmd_song_add, NULL, 0},
+    {"remove", NULL, "exactly two arguments", "<playlist> <url>",
+     "Remove a song by URL", 2, 2, cmd_song_remove, NULL, 0},
+    {"list", NULL, "exactly one playlist name", "<playlist>",
+     "List the songs in a playlist", 1, 1, cmd_song_list, NULL, 0},
+};
+
+/* `vyt playlist ...` */
+static const pl_command_t playlist_commands[] = {
+    {"add", NULL, "exactly one playlist name", "<name>",
+     "Create a new playlist", 1, 1, cmd_add, NULL, 0},
+    {"list", NULL, "no arguments", "",
+     "List all playlists", 0, 0, cmd_list, NULL, 0},
+    {"remove", NULL, "exactly one playlist name", "<name>",
+     "Remove a playlist", 1, 1, cmd_remove, NULL, 0},
+    {"play", NULL, "exactly one playlist name", "<name>",
+     "Play a playlist shuffled forever", 1, 1, cmd_play, NULL, 0},
+    {"song", NULL, "a command", "<command> ...",
+     "Manage the songs in a playlist", 0, -1, NULL, song_commands,
+     COUNT(song_commands)},
+    {"help", "-h --help", "no arguments", "",
+     "Show this help", 0, 0, cmd_help, NULL, 0},
+};
+
+/* ========================================================================= */
+/* LISTINGS                                                                  */
+/* ========================================================================= */
+
+/* The full invocation of one command: "vyt playlist add <name>".
+ * `path` is how the group is reached ("playlist", "playlist song"); the
+ * program name is added here, so the error messages can quote the command
+ * without it ("'playlist add' takes ...") while the usage lines show the
+ * whole invocation. */
+static void format_usage(char *buf, size_t bufsz, const char *path,
+                         const pl_command_t *cmd)
+{
+    if (cmd->syntax[0] != '\0')
+    {
+        snprintf(buf, bufsz, "vyt %s %s %s", path, cmd->name, cmd->syntax);
+    }
+    else
+    {
+        snprintf(buf, bufsz, "vyt %s %s", path, cmd->name);
+    }
 }
 
-/* Described command list: what `vyt playlist help` prints. */
-void playlist_cmd_print_help(FILE *stream)
+/* The widest usage line in a table, so the summaries can be lined up. */
+static size_t command_table_width(const pl_command_t *table, size_t count,
+                                  const char *path)
 {
-    fprintf(stream,
-            "Usage:\n"
-            "  vyt playlist add <name>                           Create a new playlist\n"
-            "  vyt playlist list                                 List all playlists\n"
-            "  vyt playlist remove <name>                        Remove a playlist\n"
-            "  vyt playlist play <name>                          Play a playlist shuffled forever\n"
-            "  vyt playlist song add <playlist> <song_name> <url>     Add a named song to a playlist\n"
-            "  vyt playlist song remove <playlist> <url>              Remove a song by URL\n"
-            "  vyt playlist song list <playlist>                      List the songs in a playlist\n");
+    size_t width = 0;
+    char usage[160];
+
+    for (size_t i = 0; i < count; i++)
+    {
+        const pl_command_t *cmd = &table[i];
+
+        format_usage(usage, sizeof usage, path, cmd);
+        size_t len = strlen(usage);
+        if (len > width)
+        {
+            width = len;
+        }
+
+        if (cmd->subs != NULL)
+        {
+            char subpath[64];
+            snprintf(subpath, sizeof subpath, "%s %s", path, cmd->name);
+            size_t sub = command_table_width(cmd->subs, cmd->sub_count, subpath);
+            if (sub > width)
+            {
+                width = sub;
+            }
+        }
+    }
+
+    return width;
 }
 
-/* The three song subcommand lines, for errors inside `playlist song ...`. */
-static void print_song_usage(FILE *stream)
+/*
+ * Print every command of a table, sub-commands included.
+ *
+ * with_summaries == 0 prints the bare syntax (what error paths show);
+ * with_summaries != 0 adds the one-line descriptions and lines them up in
+ * one column.
+ */
+static void print_commands(FILE *stream, const pl_command_t *table,
+                           size_t count, const char *path, size_t width,
+                           int with_summaries)
 {
-    fputs("Usage:\n"
-          "  vyt playlist song add <playlist> <song_name> <url>\n"
-          "  vyt playlist song remove <playlist> <url>\n"
-          "  vyt playlist song list <playlist>\n",
-          stream);
+    char usage[160];
+
+    for (size_t i = 0; i < count; i++)
+    {
+        const pl_command_t *cmd = &table[i];
+
+        format_usage(usage, sizeof usage, path, cmd);
+
+        if (with_summaries)
+        {
+            fprintf(stream, "  %-*s  %s\n", (int)width, usage, cmd->summary);
+        }
+        else
+        {
+            fprintf(stream, "  %s\n", usage);
+        }
+
+        if (cmd->subs != NULL)
+        {
+            char subpath[64];
+            snprintf(subpath, sizeof subpath, "%s %s", path, cmd->name);
+            print_commands(stream, cmd->subs, cmd->sub_count, subpath, width,
+                           with_summaries);
+        }
+    }
+}
+
+/* The bare syntax of a command group: what an error path shows. */
+static void print_group_usage(FILE *stream, const pl_command_t *table,
+                              size_t count, const char *path)
+{
+    fputs("Usage:\n", stream);
+    print_commands(stream, table, count, path, 0, 0);
+}
+
+/* The described command list: what `vyt playlist help` prints. */
+static void print_command_help(FILE *stream, const pl_command_t *table,
+                               size_t count, const char *path)
+{
+    fputs("Usage:\n", stream);
+    print_commands(stream, table, count, path,
+                   command_table_width(table, count, path), 1);
 }
 
 /* ========================================================================= */
@@ -167,29 +304,12 @@ static int fail_ctx(const char *action, const char *playlist,
     return 1;
 }
 
-/* Wrong number of words after "vyt playlist ...".  The usage line for the
- * offending command replaces the old full-dump, so the fix is one glance
- * away without scrolling past six unrelated commands. */
-static int usage_error(const char *command, const char *expected,
-                       const char *usage)
-{
-    out_error(stderr, "'%s' takes %s", command, expected);
-    out_hint(stderr, "usage: %s", usage);
-    return 1;
-}
-
 /* ========================================================================= */
 /* COMMANDS                                                                  */
 /* ========================================================================= */
 
-static int cmd_add(int argc, char **argv)
+static int cmd_add(char **argv)
 {
-    if (argc != 1)
-    {
-        return usage_error("playlist add", "exactly one playlist name",
-                           "vyt playlist add <name>");
-    }
-
     pl_status_t status = playlist_create(argv[0]);
     if (status != PL_OK)
     {
@@ -200,14 +320,8 @@ static int cmd_add(int argc, char **argv)
     return 0;
 }
 
-static int cmd_remove(int argc, char **argv)
+static int cmd_remove(char **argv)
 {
-    if (argc != 1)
-    {
-        return usage_error("playlist remove", "exactly one playlist name",
-                           "vyt playlist remove <name>");
-    }
-
     pl_status_t status = playlist_delete(argv[0]);
     if (status != PL_OK)
     {
@@ -218,27 +332,9 @@ static int cmd_remove(int argc, char **argv)
     return 0;
 }
 
-/* Digit count of n, minimum 1; used to align numbered lists. */
-static size_t num_cols(size_t n)
-{
-    size_t cols = 1;
-    while (n >= 10)
-    {
-        n /= 10;
-        cols++;
-    }
-    return cols;
-}
-
-static int cmd_list(int argc, char **argv)
+static int cmd_list(char **argv)
 {
     (void)argv;
-
-    if (argc != 0)
-    {
-        return usage_error("playlist list", "no arguments",
-                           "vyt playlist list");
-    }
 
     char **names = NULL;
     size_t count = 0;
@@ -309,11 +405,13 @@ static int cmd_list(int argc, char **argv)
         printf("%-*s", (int)(max_width + 2), names[i]);
         if (counts[i] == SIZE_MAX)
         {
-            printf("%s?%s\n", out_sgr(stdout, "1;31"), out_reset(stdout));
+            printf("%s?%s\n", out_style(stdout, OUT_ERROR),
+                   out_style(stdout, OUT_RESET));
         }
         else if (counts[i] == 0)
         {
-            printf("%sempty%s\n", out_sgr(stdout, "2"), out_reset(stdout));
+            printf("%sempty%s\n", out_style(stdout, OUT_DIM),
+                   out_style(stdout, OUT_RESET));
         }
         else
         {
@@ -331,14 +429,8 @@ static int cmd_list(int argc, char **argv)
 /* song subcommands                                                          */
 /* ------------------------------------------------------------------------ */
 
-static int cmd_song_add(int argc, char **argv)
+static int cmd_song_add(char **argv)
 {
-    if (argc != 3)
-    {
-        return usage_error("playlist song add", "exactly three arguments",
-                           "vyt playlist song add <playlist> <song_name> <url>");
-    }
-
     const char *name = argv[0];
     const char *song_name = argv[1];
     const char *url = argv[2];
@@ -353,14 +445,8 @@ static int cmd_song_add(int argc, char **argv)
     return 0;
 }
 
-static int cmd_song_remove(int argc, char **argv)
+static int cmd_song_remove(char **argv)
 {
-    if (argc != 2)
-    {
-        return usage_error("playlist song remove", "exactly two arguments",
-                           "vyt playlist song remove <playlist> <url>");
-    }
-
     const char *name = argv[0];
     const char *url = argv[1];
 
@@ -376,14 +462,8 @@ static int cmd_song_remove(int argc, char **argv)
     return 0;
 }
 
-static int cmd_song_list(int argc, char **argv)
+static int cmd_song_list(char **argv)
 {
-    if (argc != 1)
-    {
-        return usage_error("playlist song list", "exactly one playlist name",
-                           "vyt playlist song list <playlist>");
-    }
-
     const char *name = argv[0];
 
     playlist_t pl;
@@ -425,10 +505,11 @@ static int cmd_song_list(int argc, char **argv)
 
     /* Interactive mode: song names on their own line, URLs dimmed beneath
      * them, so long names and long URLs never fight for the same column. */
-    fprintf(stdout, "%s%zu song%s in '%s':%s\n", out_sgr(stdout, "1"),
-            pl.count, (pl.count == 1) ? "" : "s", name, out_reset(stdout));
+    fprintf(stdout, "%s%zu song%s in '%s':%s\n", out_style(stdout, OUT_BOLD),
+            pl.count, (pl.count == 1) ? "" : "s", name,
+            out_style(stdout, OUT_RESET));
 
-    size_t ncols = num_cols(pl.count);
+    size_t ncols = out_num_cols(pl.count);
     int width = out_term_width(stdout);
     size_t indent = ncols + 2; /* "NN. " */
 
@@ -436,12 +517,7 @@ static int cmd_song_list(int argc, char **argv)
     {
         if (pl.songs[i].name != NULL && pl.songs[i].name[0] != '\0')
         {
-            size_t max_name = 40;
-            if (width > (int)(indent + 1) &&
-                (size_t)width - indent - 1 < max_name)
-            {
-                max_name = (size_t)width - indent - 1;
-            }
+            size_t max_name = out_fit_cols(width, indent, 40);
             if (max_name > 256)
             {
                 max_name = 256;
@@ -449,21 +525,20 @@ static int cmd_song_list(int argc, char **argv)
 
             char nbuf[268];
             out_truncate_utf8(nbuf, sizeof nbuf, pl.songs[i].name, max_name);
-            fprintf(stdout, "%s%*zu.%s %s%s%s\n", out_sgr(stdout, "2"),
-                    (int)ncols, i + 1, out_reset(stdout),
-                    out_sgr(stdout, "1"), nbuf, out_reset(stdout));
-            fprintf(stdout, "%s%*s%s%s\n", out_sgr(stdout, "2"),
-                    (int)(ncols + 2), "", pl.songs[i].url,
-                    out_reset(stdout));
+            fprintf(stdout, "%s%*zu.%s %s%s%s\n", out_style(stdout, OUT_DIM),
+                    (int)ncols, i + 1, out_style(stdout, OUT_RESET),
+                    out_style(stdout, OUT_BOLD), nbuf,
+                    out_style(stdout, OUT_RESET));
+            out_print_dim(stdout, indent, pl.songs[i].url);
         }
         else
         {
             /* Legacy entry: the URL is all we know, so it takes the title
              * slot (dimmed to keep it clearly secondary). */
-            fprintf(stdout, "%s%*zu.%s %s%s%s\n", out_sgr(stdout, "2"),
-                    (int)ncols, i + 1, out_reset(stdout),
-                    out_sgr(stdout, "2"), pl.songs[i].url,
-                    out_reset(stdout));
+            fprintf(stdout, "%s%*zu.%s %s%s%s\n", out_style(stdout, OUT_DIM),
+                    (int)ncols, i + 1, out_style(stdout, OUT_RESET),
+                    out_style(stdout, OUT_DIM), pl.songs[i].url,
+                    out_style(stdout, OUT_RESET));
         }
     }
 
@@ -471,35 +546,13 @@ static int cmd_song_list(int argc, char **argv)
     return 0;
 }
 
-static int cmd_song(int argc, char **argv)
+static int cmd_help(char **argv)
 {
-    if (argc < 1)
-    {
-        out_error(stderr, "'playlist song' requires a command");
-        print_song_usage(stderr);
-        return 1;
-    }
+    (void)argv;
 
-    const char *command = argv[0];
-
-    if (strcmp(command, "add") == 0)
-    {
-        return cmd_song_add(argc - 1, argv + 1);
-    }
-
-    if (strcmp(command, "remove") == 0)
-    {
-        return cmd_song_remove(argc - 1, argv + 1);
-    }
-
-    if (strcmp(command, "list") == 0)
-    {
-        return cmd_song_list(argc - 1, argv + 1);
-    }
-
-    out_error(stderr, "unknown song command '%s'", command);
-    print_song_usage(stderr);
-    return 1;
+    print_command_help(stdout, playlist_commands, COUNT(playlist_commands),
+                       "playlist");
+    return 0;
 }
 
 /* ========================================================================= */
@@ -632,14 +685,8 @@ static size_t pick_next_index(size_t count, size_t previous)
     return idx;
 }
 
-static int cmd_play(int argc, char **argv)
+static int cmd_play(char **argv)
 {
-    if (argc != 1)
-    {
-        return usage_error("playlist play", "exactly one playlist name",
-                           "vyt playlist play <playlist>");
-    }
-
     const char *name = argv[0];
 
     playlist_t pl;
@@ -710,14 +757,14 @@ static int cmd_play(int argc, char **argv)
         if (song_name != NULL && song_name[0] != '\0')
         {
             out_status(stdout, "now playing [%zu/%zu]: %s%s%s", idx + 1,
-                       pl.count, out_sgr(stdout, "1"), song_name,
-                       out_reset(stdout));
+                       pl.count, out_style(stdout, OUT_BOLD), song_name,
+                       out_style(stdout, OUT_RESET));
         }
         else
         {
             out_status(stdout, "now playing [%zu/%zu]: %s%s%s", idx + 1,
-                       pl.count, out_sgr(stdout, "2"), url,
-                       out_reset(stdout));
+                       pl.count, out_style(stdout, OUT_DIM), url,
+                       out_style(stdout, OUT_RESET));
         }
         fflush(stdout);
 
@@ -752,51 +799,108 @@ static int cmd_play(int argc, char **argv)
 /* DISPATCH                                                                  */
 /* ========================================================================= */
 
-int playlist_cmd_run(int argc, char **argv)
+/* Does `name` match one of the space-separated `aliases`? */
+static int matches_alias(const char *aliases, const char *name)
+{
+    size_t len = strlen(name);
+
+    for (const char *p = aliases; *p != '\0';)
+    {
+        while (*p == ' ')
+        {
+            p++;
+        }
+
+        const char *end = strchr(p, ' ');
+        size_t word_len = (end != NULL) ? (size_t)(end - p) : strlen(p);
+
+        if (word_len == len && strncmp(p, name, len) == 0)
+        {
+            return 1;
+        }
+
+        p += word_len;
+    }
+
+    return 0;
+}
+
+/* The command named `name`, or NULL when the table has no such command. */
+static const pl_command_t *find_command(const pl_command_t *table,
+                                        size_t count, const char *name)
+{
+    for (size_t i = 0; i < count; i++)
+    {
+        if (strcmp(table[i].name, name) == 0)
+        {
+            return &table[i];
+        }
+        if (table[i].aliases != NULL && matches_alias(table[i].aliases, name))
+        {
+            return &table[i];
+        }
+    }
+    return NULL;
+}
+
+/* The last word of a command path: "playlist" or "song". */
+static const char *group_label(const char *path)
+{
+    const char *space = strrchr(path, ' ');
+    return (space != NULL) ? space + 1 : path;
+}
+
+/*
+ * Run the command named by argv[0] out of `table`.
+ *
+ * `path` is how the group is reached from the command line ("playlist",
+ * "playlist song"); it is what the error messages quote.
+ */
+static int run_command_group(const pl_command_t *table, size_t count,
+                              const char *path, int argc, char **argv)
 {
     if (argc < 1)
     {
-        out_error(stderr, "'playlist' requires a command");
-        playlist_cmd_print_usage(stderr);
+        out_error(stderr, "'%s' requires a command", path);
+        print_group_usage(stderr, table, count, path);
         return 1;
     }
 
-    const char *command = argv[0];
+    const char *name = argv[0];
+    const pl_command_t *cmd = find_command(table, count, name);
 
-    if (strcmp(command, "add") == 0)
+    if (cmd == NULL)
     {
-        return cmd_add(argc - 1, argv + 1);
+        out_error(stderr, "unknown %s command '%s'", group_label(path), name);
+        out_hint(stderr, "run 'vyt playlist help' to list the commands");
+        return 1;
     }
 
-    if (strcmp(command, "list") == 0)
+    /* A word that starts a group of its own ("song") hands the remaining
+     * words to that group's table. */
+    if (cmd->subs != NULL)
     {
-        return cmd_list(argc - 1, argv + 1);
+        char subpath[64];
+        snprintf(subpath, sizeof subpath, "%s %s", path, cmd->name);
+        return run_command_group(cmd->subs, cmd->sub_count, subpath, argc - 1,
+                                 argv + 1);
     }
 
-    if (strcmp(command, "remove") == 0)
+    int args = argc - 1;
+    if (args < cmd->min_args || (cmd->max_args >= 0 && args > cmd->max_args))
     {
-        return cmd_remove(argc - 1, argv + 1);
+        char usage[160];
+        format_usage(usage, sizeof usage, path, cmd);
+        out_error(stderr, "'%s %s' takes %s", path, cmd->name, cmd->args);
+        out_hint(stderr, "usage: %s", usage);
+        return 1;
     }
 
-    if (strcmp(command, "help") == 0 ||
-        strcmp(command, "-h") == 0 ||
-        strcmp(command, "--help") == 0)
-    {
-        playlist_cmd_print_help(stdout);
-        return 0;
-    }
+    return cmd->handler(argv + 1);
+}
 
-    if (strcmp(command, "song") == 0)
-    {
-        return cmd_song(argc - 1, argv + 1);
-    }
-
-    if (strcmp(command, "play") == 0)
-    {
-        return cmd_play(argc - 1, argv + 1);
-    }
-
-    out_error(stderr, "unknown playlist command '%s'", command);
-    out_hint(stderr, "run 'vyt playlist help' to list the commands");
-    return 1;
+int playlist_cmd_run(int argc, char **argv)
+{
+    return run_command_group(playlist_commands, COUNT(playlist_commands),
+                             "playlist", argc, argv);
 }

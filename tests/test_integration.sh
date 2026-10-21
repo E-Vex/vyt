@@ -178,6 +178,22 @@ expect_err "non-empty" "empty -s explains itself" "$BIN" -s ""
 expect_no_esc_out "-h piped has no escapes" "$BIN" -h
 expect_no_esc_err "error piped has no escapes" "$BIN" -x
 
+# Long options are the same options, spelled out.
+expect_status 0 "--help exits 0" "$BIN" --help
+expect_out "Options:" "--help shows options" "$BIN" --help
+expect_status 0 "--version exits 0" "$BIN" --version
+expect_out "vyt $EXPECTED_VERSION" "--version prints version" "$BIN" --version
+expect_status 1 "unknown long option exits 1" "$BIN" --bogus
+expect_err "unknown option" "unknown long option explains itself" "$BIN" --bogus
+expect_status 1 "long option without argument exits 1" "$BIN" --music
+expect_err "requires an argument" "long option without argument explains itself" "$BIN" --music
+
+# A reference that is neither a URL nor a video ID is refused, and the
+# refusal says what was expected.
+expect_status 1 "invalid reference exits 1" "$BIN" -m "not a url"
+expect_err "not a YouTube URL or video ID" "invalid reference explains itself" "$BIN" -m "not a url"
+expect_err "vyt: hint:" "invalid reference offers a hint" "$BIN" -m "not a url"
+
 # ---------------------------------------------------------------------------
 # playlist lifecycle, with exit codes
 # ---------------------------------------------------------------------------
@@ -223,6 +239,9 @@ expect_err "vyt playlist help" "unknown command points to help" "$BIN" playlist 
 
 expect_status 0 "playlist help exits 0" "$BIN" playlist help
 expect_out "Create a new playlist" "playlist help describes commands" "$BIN" playlist help
+expect_status 0 "playlist -h exits 0" "$BIN" playlist -h
+expect_status 0 "playlist --help exits 0" "$BIN" playlist --help
+expect_out "vyt playlist song add" "playlist help lists the song commands" "$BIN" playlist help
 
 expect_status 1 "wrong arg count fails" "$BIN" playlist song add chill
 expect_err "usage:" "wrong arg count shows usage" "$BIN" playlist song add chill
@@ -342,8 +361,23 @@ expect_status 5 "download failure passes status through" "$BIN" -d "https://yout
 expect_err "yt-dlp simulated download failure" "download failure surfaces yt-dlp's diagnostic" "$BIN" -d "https://youtu.be/abc"
 
 # Missing yt-dlp: conventional 127 with the not-found diagnostic.
-expect_status 127 "missing yt-dlp download exits 127" env PATH="$TMP/emptybin" "$BIN" -d q
-expect_err "not found" "missing yt-dlp download explains itself" env PATH="$TMP/emptybin" "$BIN" -d q
+expect_status 127 "missing yt-dlp download exits 127" env PATH="$TMP/emptybin" "$BIN" -d "https://youtu.be/abc"
+expect_err "not found" "missing yt-dlp download explains itself" env PATH="$TMP/emptybin" "$BIN" -d "https://youtu.be/abc"
+
+# A bare video ID is expanded to a youtu.be link before yt-dlp sees it.
+cat > "$FAKE/yt-dlp" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$@" > yt-dlp-download-args
+exit 0
+EOF
+chmod +x "$FAKE/yt-dlp"
+expect_status 0 "video ID download succeeds" "$BIN" -d "dQw4w9WgXcQ"
+if grep -q "https://youtu.be/dQw4w9WgXcQ" yt-dlp-download-args; then
+    ok
+else
+    bad "video ID: the ID was not expanded to a youtu.be link"
+fi
+rm -f yt-dlp-download-args
 
 # ---------------------------------------------------------------------------
 # color behavior
@@ -356,8 +390,42 @@ expect_esc_err "CLICOLOR_FORCE colorizes errors" env CLICOLOR_FORCE=1 "$BIN" pla
 expect_no_esc_err "NO_COLOR silences errors" env CLICOLOR_FORCE=1 NO_COLOR=1 "$BIN" playlist song list nope
 
 # ---------------------------------------------------------------------------
+# playback: what mpv is actually asked to play
+# ---------------------------------------------------------------------------
+
+cat > "$FAKE/mpv" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$@" > mpv-args
+exit 0
+EOF
+chmod +x "$FAKE/mpv"
+
+expect_status 0 "play as music succeeds" "$BIN" -m "https://youtu.be/abc"
+if grep -q -- "--no-video" mpv-args; then ok; else bad "play as music: --no-video missing"; fi
+if grep -q "https://youtu.be/abc" mpv-args; then ok; else bad "play as music: URL missing"; fi
+rm -f mpv-args
+
+# A bare video ID reaches mpv as a youtu.be link.
+expect_status 0 "play by video ID succeeds" "$BIN" -m "dQw4w9WgXcQ"
+if grep -q "https://youtu.be/dQw4w9WgXcQ" mpv-args; then ok; else bad "play by video ID: not expanded"; fi
+rm -f mpv-args
+
+expect_status 0 "play as video succeeds" "$BIN" -v "dQw4w9WgXcQ"
+if grep -q -- "--no-video" mpv-args; then bad "play as video: --no-video should be absent"; else ok; fi
+rm -f mpv-args
+
+# ---------------------------------------------------------------------------
 # playback via stub mpv (session-level smoke test)
 # ---------------------------------------------------------------------------
+
+# The playlist session needs mpv to take a moment, so it plays briefly
+# instead of returning instantly.
+cat > "$FAKE/mpv" <<'EOF'
+#!/bin/sh
+sleep 0.1
+exit 0
+EOF
+chmod +x "$FAKE/mpv"
 
 # One-song playlist: stub mpv exits 0 quickly, so vyt loops until the
 # stop signal.  timeout sends TERM; vyt's handler stops between songs and
@@ -400,7 +468,7 @@ EOF
     if timeout -k 1 15 script -qec "$BIN -s q" "$tty_out" >/dev/null 2>&1; then
         assert_file "$tty_out" "1 result for 'q':" "tty search prints a header"
         assert_file "$tty_out" "Only Result" "tty search shows the title"
-        assert_file "$tty_out" "1:01 Â· Chan" "tty search shows duration and channel"
+        assert_file "$tty_out" "1:01 · Chan" "tty search shows duration and channel"
         assert_file "$tty_out" "play one with: vyt -m <URL>" "tty search has a footer hint"
     else
         echo "note: script(1) could not allocate a pty; tty checks skipped" >&2

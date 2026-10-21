@@ -14,9 +14,6 @@
 #include "proc.h"
 #include "search.h"
 
-/* yt-dlp prints "NA" for fields it could not extract from a flat entry. */
-#define YTNA "NA"
-
 /* Unit separator between template fields.  Written as an octal escape:
  * a hex escape here would greedily absorb following hex-digit-looking
  * template text, and 037 cannot be confused with anything. */
@@ -109,7 +106,7 @@ int search_parse_line(const char *line, search_entry_t *e)
         free(url);
     }
 
-    if (channel[0] != '\0' && strcmp(channel, YTNA) != 0)
+    if (channel[0] != '\0' && strcmp(channel, SEARCH_NA) != 0)
     {
         e->channel = channel;
     }
@@ -141,168 +138,6 @@ void search_entry_free(search_entry_t *e)
     e->title = NULL;
     e->url = NULL;
     e->channel = NULL;
-}
-
-char *search_format_duration(char *buf, size_t bufsz, double sec)
-{
-    if (!(sec > 0.0))
-    {
-        return NULL; /* NA, 0, negative or NaN */
-    }
-
-    long total = (long)(sec + 0.5);
-    if (total >= 3600)
-    {
-        snprintf(buf, bufsz, "%ld:%02ld:%02ld", total / 3600,
-                 (total / 60) % 60, total % 60);
-    }
-    else
-    {
-        snprintf(buf, bufsz, "%ld:%02ld", total / 60, total % 60);
-    }
-    return buf;
-}
-
-/* ========================================================================= */
-/* RESULT PRINTING                                                           */
-/* ========================================================================= */
-
-/* Maximum columns we are willing to spend on a title before truncating,
- * regardless of how wide the terminal reports itself.  Keeps the per-entry
- * stack buffers bounded on unusual terminals. */
-#define TITLE_MAX_COLS 800
-
-/* A one-line query safe to echo back: control characters become spaces
- * and the result is truncated, so a query can never rearrange the header. */
-static void display_query(char *buf, size_t bufsz, const char *query)
-{
-    char clean[128];
-    size_t j = 0;
-    for (size_t i = 0; query[i] != '\0' && j < sizeof clean - 1; i++)
-    {
-        unsigned char c = (unsigned char)query[i];
-        clean[j++] = (c < 0x20 || c == 0x7f) ? ' ' : (char)c;
-    }
-    clean[j] = '\0';
-
-    out_truncate_utf8(buf, bufsz, clean, sizeof clean - 1);
-}
-
-void search_print_results(FILE *out, const char *query,
-                          const search_entry_t *entries, size_t count,
-                          int pretty)
-{
-    if (!pretty)
-    {
-        /* Historical scriptable format: one "title | url" line per result,
-         * byte-identical to what `yt-dlp --print '%(title)s | %(webpage_url)s'`
-         * used to emit through this command. */
-        for (size_t i = 0; i < count; i++)
-        {
-            if (entries[i].url != NULL)
-            {
-                fprintf(out, "%s | %s\n", entries[i].title, entries[i].url);
-            }
-            else
-            {
-                fprintf(out, "%s\n", entries[i].title);
-            }
-        }
-        return;
-    }
-
-    char q[160];
-    display_query(q, sizeof q, query);
-
-    fprintf(out, "%s%zu result%s for '%s':%s\n", out_sgr(out, "1"), count,
-            (count == 1) ? "" : "s", q, out_reset(out));
-
-    int width = out_term_width(out);
-
-    /* Column count of the largest index, minimum 2 so " 1." aligns with
-     * "10." and the metadata/URL lines under it. */
-    size_t num_cols = 2;
-    for (size_t n = count; n >= 10; n /= 10)
-    {
-        num_cols++;
-    }
-    size_t indent = num_cols + 2; /* "NN. " */
-
-    for (size_t i = 0; i < count; i++)
-    {
-        const search_entry_t *e = &entries[i];
-
-        const char *title =
-            (e->title[0] != '\0' && strcmp(e->title, YTNA) != 0)
-                ? e->title
-                : "(untitled)";
-
-        size_t max_title = TITLE_MAX_COLS;
-        if (width > (int)(indent + 1) &&
-            (size_t)width - indent - 1 < max_title)
-        {
-            max_title = (size_t)width - indent - 1;
-        }
-        char tbuf[TITLE_MAX_COLS + 8];
-        out_truncate_utf8(tbuf, sizeof tbuf, title, max_title);
-
-        fprintf(out, "%s%*zu.%s %s%s%s\n", out_sgr(out, "2"),
-                (int)num_cols, i + 1, out_reset(out), out_sgr(out, "1"),
-                tbuf, out_reset(out));
-
-        char dbuf[32];
-        const char *dur =
-            search_format_duration(dbuf, sizeof dbuf, e->duration);
-        int has_dur = (dur != NULL);
-        int has_chan = (e->channel != NULL);
-
-        if (has_dur || has_chan)
-        {
-            fputs(out_sgr(out, "2"), out);
-            fprintf(out, "%*s", (int)indent, "");
-            if (has_dur)
-            {
-                fputs(dur, out);
-            }
-            if (has_dur && has_chan)
-            {
-                fputs(" \u00b7 ", out); /* "·" */
-            }
-            if (has_chan)
-            {
-                size_t used = indent + (has_dur ? strlen(dur) : 0) + 3;
-                size_t max_chan = 40;
-                if (width > (int)(used + 1) &&
-                    (size_t)width - used - 1 > max_chan)
-                {
-                    max_chan = (size_t)width - used - 1;
-                }
-                if (max_chan > 200)
-                {
-                    max_chan = 200;
-                }
-                char cbuf[820];
-                out_truncate_utf8(cbuf, sizeof cbuf, e->channel, max_chan);
-                fputs(cbuf, out);
-            }
-            fputs(out_reset(out), out);
-            fputc('\n', out);
-        }
-
-        if (e->url != NULL)
-        {
-            /* Never truncate the URL: it is what the user copies into
-             * `vyt -m` or `vyt -v`.  A very long URL wraps, which is fine
-             * for a line whose only job is to be selected. */
-            fputs(out_sgr(out, "2"), out);
-            fprintf(out, "%*s%s", (int)indent, "", e->url);
-            fputs(out_reset(out), out);
-            fputc('\n', out);
-        }
-    }
-
-    fprintf(out, "\n%splay one with: vyt -m <URL>%s\n", out_sgr(out, "2"),
-            out_reset(out));
 }
 
 /* ========================================================================= */
@@ -417,7 +252,7 @@ int search_youtube(const char *query)
     else if (results.count == 0)
     {
         char q[160];
-        display_query(q, sizeof q, query);
+        out_safe_line(q, sizeof q, query);
         out_status(stderr, "no results for '%s'", q);
         out_hint(stderr, "try different keywords");
     }
