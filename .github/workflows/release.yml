@@ -3,6 +3,11 @@ name: Release
 on:
   push:
     tags: ['v*']
+  # A release can also be started by hand, on a tag that already exists:
+  #   gh workflow run release.yml --ref v2.1.0
+  # The jobs below read the version from the ref they run on, so the
+  # dispatched ref has to be the tag that is being released.
+  workflow_dispatch:
 
 permissions:
   contents: write
