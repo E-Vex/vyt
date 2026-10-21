@@ -1,4 +1,4 @@
-.TH VYT 1 "2026" "vyt 2.0.0" "User Commands"
+.TH VYT 1 "2026" "vyt 2.1.0" "User Commands"
 .SH NAME
 vyt \- a tiny C wrapper around yt-dlp and mpv
 .SH SYNOPSIS
@@ -45,20 +45,21 @@ In addition to single-URL playback and search,
 .B vyt
 manages persistent named playlists stored as plain text files on disk.
 .SH OPTIONS
+Every option has a short and a long spelling; the two are equivalent.
 .TP
-.BI \-m " URL"
+.BI \-m ", " \-\-music " URL"
 Play
 .I URL
 as music: audio only, via
 .BR "mpv --no-video" .
 .TP
-.BI \-v " URL"
+.BI \-v ", " \-\-video " URL"
 Play
 .I URL
 as video, via
 .BR mpv .
 .TP
-.BI \-s " QUERY"
+.BI \-s ", " \-\-search " QUERY"
 Search YouTube for
 .I QUERY
 via
@@ -75,7 +76,7 @@ for scripting; see
 below.  A search that returns no results is not an error: vyt prints a
 note and exits 0.
 .TP
-.BI \-d " URL"
+.BI \-d ", " \-\-download " URL"
 Download
 .I URL
 via
@@ -92,11 +93,39 @@ for playback,
 writes the media to disk.  yt-dlp's own progress bar and diagnostics are
 shown on the terminal, and vyt exits with yt-dlp's status.
 .TP
-.B \-V
+.BI \-V ", " \-\-version
 Print the version and exit.
 .TP
-.B \-h
+.BI \-h ", " \-\-help
 Show usage and exit.
+.SH MEDIA REFERENCES
+The
+.BR \-m ", " \-v " and " \-d
+options accept three spellings of the same thing, and treat them
+equally:
+.PP
+.RS
+.nf
+https://youtu.be/dQw4w9WgXcQ   a full link
+youtu.be/dQw4w9WgXcQ           a YouTube link without its scheme
+dQw4w9WgXcQ                   a bare video ID
+.fi
+.RE
+.PP
+Surrounding whitespace is ignored, so a link pasted with a stray newline
+still works.  Anything else is refused with an error naming what was
+expected, instead of being handed to
+.B mpv
+to fail obscurely:
+.PP
+.RS
+.nf
+vyt: error: 'not a url' is not a YouTube URL or video ID
+vyt: hint: expected a link such as https://youtu.be/dQw4w9WgXcQ, or a video ID
+.fi
+.RE
+.PP
+A search query is free text and is never rewritten.
 .SH OUTPUT
 .B vyt
 aims for output where every line has a purpose.  All messages share one

@@ -1,6 +1,6 @@
 # Maintainer: E-Vex <contact@e-vex.dev>
 pkgname=vyt
-pkgver=2.0.0
+pkgver=2.1.0
 pkgrel=1
 pkgdesc="tiny C wrapper around yt-dlp and mpv"
 url="https://github.com/E-Vex/vyt"

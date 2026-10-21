@@ -39,12 +39,12 @@ Usage:
   vyt -h
 
 Options:
-  -m URL    Play YouTube URL as music (audio only, via mpv --no-video)
-  -v URL    Play YouTube URL as video (via mpv)
-  -s QUERY  Search YouTube for QUERY (via yt-dlp, top 10 results)
-  -d URL    Download YouTube media via yt-dlp to the current directory
-  -V        Print the version
-  -h        Show this message :D
+  -m, --music URL     Play YouTube URL as music (audio only, via mpv --no-video)
+  -v, --video URL     Play YouTube URL as video (via mpv)
+  -s, --search QUERY  Search YouTube for QUERY (via yt-dlp, top 10 results)
+  -d, --download URL  Download YouTube media via yt-dlp to the current directory
+  -V, --version       Print the version
+  -h, --help          Show this message :D
 
 Playlist:
   vyt playlist add <name>                          Create a new playlist
@@ -55,6 +55,10 @@ Playlist:
   vyt playlist song remove <p> <url>               Remove a URL from a playlist
   vyt playlist song list <p>                       List songs in a playlist
 ```
+
+Every option has a long spelling (`--music`, `--video`, `--search`,
+`--download`, `--help`, `--version`); the short ones stay the documented
+way to use `vyt`.
 
 See `man vyt` for the full manual page.
 
@@ -72,6 +76,26 @@ vyt -s "Purgatori"
 
 # Download media to the current directory
 vyt -d "https://youtu.be/pahb4TugTkQ"
+```
+
+### Media references
+
+`vyt` accepts a full link, a YouTube link without its scheme, or a bare
+video ID — all three of these play the same video:
+
+```sh
+vyt -m "https://youtu.be/dQw4w9WgXcQ"
+vyt -m "youtu.be/dQw4w9WgXcQ"
+vyt -m "dQw4w9WgXcQ"
+```
+
+Anything else is refused with a clear error instead of being handed to
+`mpv` to fail obscurely:
+
+```
+$ vyt -m "not a url"
+vyt: error: 'not a url' is not a YouTube URL or video ID
+vyt: hint: expected a link such as https://youtu.be/dQw4w9WgXcQ, or a video ID
 ```
 
 ## Terminal output
@@ -262,7 +286,8 @@ make test
 ```
 
 This builds and runs the unit suites (CLI parsing, playlist storage,
-terminal-output formatting, subprocess handling, search formatting) and
+terminal-output formatting, subprocess handling, search formatting, URL
+normalization) and
 an integration suite that exercises the real binary end to end against
 stub `yt-dlp`/`mpv` executables — no network access is needed. The
 interactive (terminal-width) listing formats can additionally be
