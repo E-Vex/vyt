@@ -20,6 +20,7 @@
 /* ========================================================================= */
 #include "output.h"
 #include "playlist.h"
+#include "vec.h"
 
 /* ========================================================================= */
 /* STATUS TEXT                                                               */
@@ -329,26 +330,19 @@ pl_status_t playlist_list(char ***names_out, size_t *count_out)
             continue;
         }
 
-        if (count == capacity)
-        {
-            size_t new_capacity = (capacity == 0) ? 8 : capacity * 2;
-            char **grown = realloc(names, new_capacity * sizeof *grown);
-            if (grown == NULL)
-            {
-                status = PL_ERR_MEMORY;
-                break;
-            }
-            names = grown;
-            capacity = new_capacity;
-        }
-
-        names[count] = strdup(entry->d_name);
-        if (names[count] == NULL)
+        char *dup = strdup(entry->d_name);
+        if (dup == NULL)
         {
             status = PL_ERR_MEMORY;
             break;
         }
-        count++;
+
+        if (vec_push_copy((void **)&names, &count, &capacity, &dup, sizeof(dup)) != 0)
+        {
+            free(dup);
+            status = PL_ERR_MEMORY;
+            break;
+        }
 
         errno = 0;
     }
@@ -480,21 +474,11 @@ pl_status_t playlist_check_song_name(const char *name)
  * them and must free them. */
 static pl_status_t songs_push(playlist_t *pl, char *name, char *url)
 {
-    if (pl->count == pl->capacity)
+    song_t song = { .name = name, .url = url };
+    if (vec_push_copy((void **)&pl->songs, &pl->count, &pl->capacity, &song, sizeof(song)) != 0)
     {
-        size_t new_capacity = (pl->capacity == 0) ? 8 : pl->capacity * 2;
-        song_t *grown = realloc(pl->songs, new_capacity * sizeof *grown);
-        if (grown == NULL)
-        {
-            return PL_ERR_MEMORY;
-        }
-        pl->songs = grown;
-        pl->capacity = new_capacity;
+        return PL_ERR_MEMORY;
     }
-
-    pl->songs[pl->count].name = name;
-    pl->songs[pl->count].url = url;
-    pl->count++;
     return PL_OK;
 }
 
@@ -695,11 +679,7 @@ void playlist_free(playlist_t *pl)
         free(pl->songs[i].name);
         free(pl->songs[i].url);
     }
-    free(pl->songs);
-
-    pl->songs = NULL;
-    pl->count = 0;
-    pl->capacity = 0;
+    vec_free((void **)&pl->songs, &pl->count, &pl->capacity);
 }
 
 /* Replace a playlist file with the given songs, atomically.
@@ -905,11 +885,7 @@ pl_status_t playlist_song_remove(const char *name, const char *url)
 
     free(pl.songs[index].name);
     free(pl.songs[index].url);
-    for (size_t i = index + 1; i < pl.count; i++)
-    {
-        pl.songs[i - 1] = pl.songs[i];
-    }
-    pl.count--;
+    vec_remove_at(pl.songs, &pl.count, index, sizeof(song_t));
 
     status = playlist_store(name, &pl);
     playlist_free(&pl);

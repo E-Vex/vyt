@@ -13,6 +13,7 @@
 #include "output.h"
 #include "proc.h"
 #include "search.h"
+#include "vec.h"
 
 /* Unit separator between template fields.  Written as an octal escape:
  * a hex escape here would greedily absorb following hex-digit-looking
@@ -164,21 +165,11 @@ static void on_result_line(const char *line, void *user_data)
         return;
     }
 
-    if (v->count == v->capacity)
+    if (vec_push_copy((void **)&v->items, &v->count, &v->capacity, &e, sizeof(e)) != 0)
     {
-        size_t new_capacity = (v->capacity == 0) ? 16 : v->capacity * 2;
-        search_entry_t *grown =
-            realloc(v->items, new_capacity * sizeof *grown);
-        if (grown == NULL)
-        {
-            search_entry_free(&e); /* drop this result, keep the rest */
-            return;
-        }
-        v->items = grown;
-        v->capacity = new_capacity;
+        search_entry_free(&e); /* drop this result, keep the rest */
+        return;
     }
-
-    v->items[v->count++] = e;
 }
 
 static void entries_free(entry_vec_t *v)
@@ -187,10 +178,7 @@ static void entries_free(entry_vec_t *v)
     {
         search_entry_free(&v->items[i]);
     }
-    free(v->items);
-    v->items = NULL;
-    v->count = 0;
-    v->capacity = 0;
+    vec_free((void **)&v->items, &v->count, &v->capacity);
 }
 
 int search_youtube(const char *query)
