@@ -6,20 +6,10 @@
 #include <unistd.h>
 
 #include "../src/cli.h"
+#include "test_helpers.h"
 
-static int failures = 0;
-static int checks = 0;
-
-#define CHECK(cond, msg)                                                    \
-    do                                                                      \
-    {                                                                       \
-        checks++;                                                           \
-        if (!(cond))                                                        \
-        {                                                                   \
-            failures++;                                                     \
-            fprintf(stderr, "FAIL: %s (%s:%d)\n", msg, __FILE__, __LINE__); \
-        }                                                                   \
-    } while (0)
+int test_failures = 0;
+int test_checks = 0;
 
 /* Parse `argv` and return the result; the caller frees opts.argument. */
 static int run_parse(char *argv[], options_t *opts)
@@ -39,8 +29,8 @@ static void expect_mode(char *argv[], cli_mode_t want, const char *msg)
     options_t opts;
     int rc = run_parse(argv, &opts);
 
-    CHECK(rc == 0, msg);
-    CHECK(opts.mode == want, msg);
+    TEST_CHECK(rc == 0, msg);
+    TEST_CHECK(opts.mode == want, msg);
     free(opts.argument);
 }
 
@@ -50,10 +40,10 @@ static void expect_argument(char *argv[], const char *want, const char *msg)
     options_t opts;
     int rc = run_parse(argv, &opts);
 
-    CHECK(rc == 0, msg);
+    TEST_CHECK(rc == 0, msg);
     if (rc == 0)
     {
-        CHECK(opts.argument != NULL && strcmp(opts.argument, want) == 0, msg);
+        TEST_CHECK(opts.argument != NULL && strcmp(opts.argument, want) == 0, msg);
     }
     free(opts.argument);
 }
@@ -64,7 +54,7 @@ static void expect_failure(char *argv[], const char *msg)
     options_t opts;
     int rc = run_parse(argv, &opts);
 
-    CHECK(rc == -1, msg);
+    TEST_CHECK(rc == -1, msg);
     free(opts.argument);
 }
 
@@ -286,12 +276,5 @@ int main(void)
     test_trailing_positional_is_error();
     test_empty_arguments_are_errors();
 
-    if (failures == 0)
-    {
-        printf("All %d checks passed.\n", checks);
-        return 0;
-    }
-
-    fprintf(stderr, "%d/%d checks failed.\n", failures, checks);
-    return 1;
+    return test_report();
 }

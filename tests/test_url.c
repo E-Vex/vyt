@@ -5,34 +5,10 @@
 #include <string.h>
 
 #include "../src/url.h"
+#include "test_helpers.h"
 
-static int failures = 0;
-static int checks = 0;
-
-#define CHECK(cond, msg)                                                    \
-    do                                                                      \
-    {                                                                       \
-        checks++;                                                           \
-        if (!(cond))                                                        \
-        {                                                                   \
-            failures++;                                                     \
-            fprintf(stderr, "FAIL: %s (%s:%d)\n", msg, __FILE__, __LINE__); \
-        }                                                                   \
-    } while (0)
-
-#define CHECK_STREQ(got, want, msg)                                         \
-    do                                                                      \
-    {                                                                       \
-        const char *g_ = (got);                                             \
-        const char *w_ = (want);                                            \
-        checks++;                                                           \
-        if (g_ == NULL || strcmp(g_, w_) != 0)                              \
-        {                                                                   \
-            failures++;                                                     \
-            fprintf(stderr, "FAIL: %s (got \"%s\", want \"%s\") (%s:%d)\n", \
-                    msg, g_ ? g_ : "(null)", w_, __FILE__, __LINE__);       \
-        }                                                                   \
-    } while (0)
+int test_failures = 0;
+int test_checks = 0;
 
 /* The reference is understood and becomes exactly `want`. */
 static void expect_url(const char *input, const char *want, const char *msg)
@@ -40,12 +16,12 @@ static void expect_url(const char *input, const char *want, const char *msg)
     url_ref_status_t status = URL_REF_INVALID;
     char *url = url_normalize_ref(input, &status);
 
-    CHECK(url != NULL, msg);
+    TEST_CHECK(url != NULL, msg);
     if (url != NULL)
     {
-        CHECK_STREQ(url, want, msg);
+        TEST_CHECK_STREQ(url, want, msg);
     }
-    CHECK(status == URL_REF_OK, msg);
+    TEST_CHECK(status == URL_REF_OK, msg);
     free(url);
 }
 
@@ -56,8 +32,8 @@ static void expect_refused(const char *input, url_ref_status_t want,
     url_ref_status_t status = URL_REF_INVALID;
     char *url = url_normalize_ref(input, &status);
 
-    CHECK(url == NULL, msg);
-    CHECK(status == want, msg);
+    TEST_CHECK(url == NULL, msg);
+    TEST_CHECK(status == want, msg);
     free(url);
 }
 
@@ -133,12 +109,5 @@ int main(void)
     test_empty_references();
     test_invalid_references();
 
-    if (failures == 0)
-    {
-        printf("All %d checks passed.\n", checks);
-        return 0;
-    }
-
-    fprintf(stderr, "%d/%d checks failed.\n", failures, checks);
-    return 1;
+    return test_report();
 }
