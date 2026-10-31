@@ -222,6 +222,10 @@ static int fail_ctx(const char *action, const char *playlist,
 {
     switch (status)
     {
+    case PL_OK:
+        /* Should not be called with PL_OK, but handle gracefully. */
+        return 0;
+
     case PL_ERR_NOT_FOUND:
         out_error(stderr, "no playlist named '%s'", playlist);
         out_hint(stderr, "run 'vyt playlist list' to see your playlists");
@@ -281,6 +285,10 @@ static int fail_ctx(const char *action, const char *playlist,
         out_error(stderr, "cannot determine the configuration directory");
         out_hint(stderr,
                  "set HOME (or XDG_CONFIG_HOME) to an absolute path");
+        break;
+
+    case PL_ERR_EMPTY:
+        out_error(stderr, "playlist is empty");
         break;
 
     case PL_ERR_MEMORY:
