@@ -9,21 +9,23 @@ int player_play_music(const char *url)
      * mistaken for an option.  Without it, an argument like "--no-video"
      * (from the CLI or a hand-edited playlist) would be interpreted by mpv
      * as a flag rather than played as media. */
-    char *argv[] = {
+    char *url_mutable = (char *)url;  /* execvp does not modify argv strings */
+    char *const argv[] = {
         "mpv",
         "--no-video",
         "--",
-        (char *)url,
+        url_mutable,
         NULL};
     return proc_run("mpv", argv);
 }
 
 int player_play_video(const char *url)
 {
-    char *argv[] = {
+    char *url_mutable = (char *)url;  /* execvp does not modify argv strings */
+    char *const argv[] = {
         "mpv",
         "--",
-        (char *)url,
+        url_mutable,
         NULL};
     return proc_run("mpv", argv);
 }
