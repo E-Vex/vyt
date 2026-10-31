@@ -1,5 +1,10 @@
 CC       ?= gcc
-CFLAGS   ?= -Wall -Wextra -Wpedantic -std=c17 -O2
+CFLAGS   ?= -Wall -Wextra -Wpedantic -std=c17 -O2 \
+            -Wshadow -Wconversion -Wsign-conversion -Wnull-dereference \
+            -Wdouble-promotion -Wformat=2 -Wundef -Wstrict-prototypes \
+            -Wmissing-prototypes -Wold-style-definition -Wcast-align \
+            -Wswitch-enum -Wduplicated-cond -Wlogical-op \
+            -fstack-protector-strong -D_FORTIFY_SOURCE=2
 SRC      := $(wildcard src/*.c)
 HDRS     := $(wildcard src/*.h)
 TARGET   := vyt
